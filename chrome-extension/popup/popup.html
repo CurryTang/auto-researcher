@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auto Reader</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Auto Reader</h1>
+      <p class="subtitle">Save to your research library</p>
+    </header>
+
+    <form id="saveForm">
+      <div class="form-group">
+        <label for="title">Title</label>
+        <input type="text" id="title" name="title" placeholder="Enter title..." required>
+      </div>
+
+      <div class="form-group">
+        <label for="url">URL</label>
+        <input type="url" id="url" name="url" placeholder="https://...">
+      </div>
+
+      <div class="form-group">
+        <label for="type">Type</label>
+        <select id="type" name="type">
+          <option value="paper">Paper</option>
+          <option value="book">Book</option>
+          <option value="blog" selected>Blog</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Tags</label>
+        <div class="tags-container">
+          <div class="selected-tags" id="selectedTags"></div>
+          <div class="tag-input-wrapper">
+            <input type="text" id="tagInput" placeholder="Add or create tag..." autocomplete="off">
+            <button type="button" id="addTagBtn" class="btn-add-tag">+</button>
+          </div>
+          <div class="tag-suggestions" id="tagSuggestions"></div>
+        </div>
+        <div class="available-tags" id="availableTags"></div>
+      </div>
+
+      <div class="form-group">
+        <label for="notes">Notes</label>
+        <textarea id="notes" name="notes" rows="3" placeholder="Add notes..."></textarea>
+      </div>
+
+      <div class="button-group">
+        <button type="button" id="saveAsLink" class="btn btn-secondary">
+          Save Link
+        </button>
+        <button type="button" id="saveAsPdf" class="btn btn-primary">
+          Save as PDF
+        </button>
+      </div>
+
+      <div class="divider">
+        <span>or</span>
+      </div>
+
+      <div class="upload-section">
+        <label for="fileInput" class="upload-label">
+          <span class="upload-icon">📄</span>
+          <span>Upload Local File</span>
+          <input type="file" id="fileInput" accept=".pdf,.epub,.txt,.html" hidden>
+        </label>
+        <p class="file-name" id="fileName"></p>
+        <button type="button" id="uploadFile" class="btn btn-upload" disabled>
+          Upload File
+        </button>
+      </div>
+    </form>
+
+    <div id="status" class="status hidden"></div>
+
+    <footer>
+      <a href="#" id="viewLibrary">View Library</a>
+      <span class="separator">|</span>
+      <a href="#" id="settings">Settings</a>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
