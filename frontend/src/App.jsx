@@ -19,6 +19,12 @@ function App() {
     return localStorage.getItem('apiUrl') || DEFAULT_API_URL;
   });
 
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [allTags, setAllTags] = useState([]);
+  const [selectedTag, setSelectedTag] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
+
   const LIMIT = 5;
 
   // Fetch documents with pagination
@@ -67,7 +73,31 @@ function App() {
   // Initial fetch
   useEffect(() => {
     fetchDocuments(true);
+    fetchTags();
   }, [apiUrl]);
+
+  // Fetch available tags
+  const fetchTags = async () => {
+    try {
+      const response = await axios.get(`${apiUrl}/tags`);
+      setAllTags(response.data.tags || []);
+    } catch (err) {
+      console.error('Failed to fetch tags:', err);
+    }
+  };
+
+  // Filter documents by search query and tag
+  const filteredDocuments = documents.filter((doc) => {
+    // Filter by search query
+    const matchesSearch = !searchQuery ||
+      doc.title.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // Filter by tag
+    const matchesTag = !selectedTag ||
+      (doc.tags && doc.tags.includes(selectedTag));
+
+    return matchesSearch && matchesTag;
+  });
 
   // Handle API URL change
   const handleApiUrlChange = (newUrl) => {
@@ -116,14 +146,82 @@ function App() {
           <h1>Auto Reader</h1>
           <p className="subtitle">Your Research Library</p>
         </div>
-        <button
-          className="settings-btn"
-          onClick={() => setShowSettings(!showSettings)}
-          title="Settings"
-        >
-          ⚙️
-        </button>
+        <div className="header-actions">
+          <button
+            className={`filter-btn ${showFilters ? 'active' : ''}`}
+            onClick={() => setShowFilters(!showFilters)}
+            title="Search & Filter"
+          >
+            🔍
+          </button>
+          <button
+            className="settings-btn"
+            onClick={() => setShowSettings(!showSettings)}
+            title="Settings"
+          >
+            ⚙️
+          </button>
+        </div>
       </header>
+
+      {showFilters && (
+        <div className="filter-panel">
+          <div className="search-box">
+            <input
+              type="text"
+              placeholder="Search by title..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="search-input"
+            />
+            {searchQuery && (
+              <button
+                className="clear-search"
+                onClick={() => setSearchQuery('')}
+              >
+                ×
+              </button>
+            )}
+          </div>
+          <div className="tag-filter">
+            <span className="filter-label">Filter by tag:</span>
+            <div className="tag-chips">
+              <button
+                className={`tag-chip ${!selectedTag ? 'active' : ''}`}
+                onClick={() => setSelectedTag(null)}
+              >
+                All
+              </button>
+              {allTags.map((tag) => (
+                <button
+                  key={tag.id}
+                  className={`tag-chip ${selectedTag === tag.name ? 'active' : ''}`}
+                  onClick={() => setSelectedTag(selectedTag === tag.name ? null : tag.name)}
+                  style={selectedTag === tag.name ? { backgroundColor: tag.color, borderColor: tag.color } : {}}
+                >
+                  {tag.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          {(searchQuery || selectedTag) && (
+            <div className="active-filters">
+              <span className="filter-count">
+                Showing {filteredDocuments.length} of {documents.length} documents
+              </span>
+              <button
+                className="clear-filters"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedTag(null);
+                }}
+              >
+                Clear filters
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {showSettings && (
         <Settings
@@ -142,7 +240,7 @@ function App() {
         )}
 
         <DocumentList
-          documents={documents}
+          documents={filteredDocuments}
           onDownload={getDownloadUrl}
           onViewNotes={(doc) => setSelectedDocument(doc)}
           onToggleRead={toggleReadStatus}

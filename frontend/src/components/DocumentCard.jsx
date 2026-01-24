@@ -99,6 +99,15 @@ function DocumentCard({ document, onDownload, onViewNotes, onToggleRead }) {
             {new URL(document.originalUrl).hostname}
           </a>
         )}
+        {document.tags && document.tags.length > 0 && (
+          <div className="document-tags">
+            {document.tags.map((tag, index) => (
+              <span key={index} className="document-tag">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
       <div className="document-actions">
         <button
