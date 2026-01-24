@@ -247,7 +247,7 @@ function App() {
           loading={loading && documents.length === 0}
         />
 
-        {documents.length > 0 && hasMore && (
+        {documents.length > 0 && hasMore && !searchQuery && !selectedTag && (
           <div className="load-more-container">
             <button
               className="load-more-btn"
@@ -259,14 +259,23 @@ function App() {
           </div>
         )}
 
-        {documents.length > 0 && !hasMore && (
+        {documents.length > 0 && !hasMore && !searchQuery && !selectedTag && (
           <p className="end-message">You've reached the end</p>
         )}
 
-        {documents.length === 0 && !loading && !error && (
+        {filteredDocuments.length === 0 && !loading && !error && (
           <div className="empty-state">
-            <p>No documents found</p>
-            <p className="hint">Save some papers using the Chrome extension!</p>
+            {documents.length === 0 ? (
+              <>
+                <p>No documents found</p>
+                <p className="hint">Save some papers using the Chrome extension!</p>
+              </>
+            ) : (
+              <>
+                <p>No matching documents</p>
+                <p className="hint">Try adjusting your search or filters</p>
+              </>
+            )}
           </div>
         )}
       </main>
