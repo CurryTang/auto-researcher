@@ -407,8 +407,9 @@ function setupFileListeners() {
         titleInput.value = file.name.replace(/\.[^/.]+$/, '');
       }
 
-      // Update button text
+      // Update button text and enable it
       saveAsPdfBtn.textContent = 'Upload File';
+      saveAsPdfBtn.disabled = false;
     }
   });
 
@@ -416,6 +417,26 @@ function setupFileListeners() {
   const clearFileBtn = document.getElementById('clearFile');
   if (clearFileBtn) {
     clearFileBtn.addEventListener('click', clearSelectedFile);
+  }
+
+  // URL input change listener - enable/disable button based on URL
+  urlInput.addEventListener('input', updateSaveButtonState);
+
+  // Initial button state
+  updateSaveButtonState();
+}
+
+// Update save button state based on URL and file selection
+function updateSaveButtonState() {
+  if (selectedFile) {
+    // File is selected - button should be enabled
+    saveAsPdfBtn.disabled = false;
+    saveAsPdfBtn.textContent = 'Upload File';
+  } else {
+    // No file - check if URL is present
+    const hasUrl = urlInput.value.trim().length > 0;
+    saveAsPdfBtn.disabled = !hasUrl;
+    saveAsPdfBtn.textContent = 'Save as PDF';
   }
 }
 
@@ -431,8 +452,8 @@ function clearSelectedFile() {
   urlInput.disabled = false;
   urlInput.style.opacity = '1';
 
-  // Reset button text
-  saveAsPdfBtn.textContent = 'Save as PDF';
+  // Update button state based on URL
+  updateSaveButtonState();
 }
 
 // Render tag suggestions dropdown
