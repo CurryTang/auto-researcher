@@ -1,7 +1,6 @@
-import { useState } from 'react';
 import DocumentCard from './DocumentCard';
 
-function DocumentList({ documents, onDownload, loading }) {
+function DocumentList({ documents, onDownload, onViewNotes, loading }) {
   if (loading) {
     return (
       <div className="loading-container">
@@ -14,7 +13,12 @@ function DocumentList({ documents, onDownload, loading }) {
   return (
     <div className="document-list">
       {documents.map((doc) => (
-        <DocumentCard key={doc.id} document={doc} onDownload={onDownload} />
+        <DocumentCard
+          key={doc.id}
+          document={doc}
+          onDownload={onDownload}
+          onViewNotes={onViewNotes}
+        />
       ))}
     </div>
   );

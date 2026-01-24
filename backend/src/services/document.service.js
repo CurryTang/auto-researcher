@@ -20,6 +20,13 @@ function rowToDocument(row) {
     userId: row.user_id,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    // Processing status fields
+    processingStatus: row.processing_status || 'pending',
+    notesS3Key: row.notes_s3_key,
+    pageCount: row.page_count,
+    processingError: row.processing_error,
+    processingStartedAt: row.processing_started_at,
+    processingCompletedAt: row.processing_completed_at,
   };
 }
 

@@ -92,6 +92,28 @@ async function deleteObject(key) {
 }
 
 /**
+ * Download an object from S3 as a buffer
+ * @param {string} key - S3 object key
+ * @returns {Promise<Buffer>}
+ */
+async function downloadBuffer(key) {
+  const command = new GetObjectCommand({
+    Bucket: config.aws.s3Bucket,
+    Key: key,
+  });
+
+  const response = await s3Client.send(command);
+
+  // Convert stream to buffer
+  const chunks = [];
+  for await (const chunk of response.Body) {
+    chunks.push(chunk);
+  }
+
+  return Buffer.concat(chunks);
+}
+
+/**
  * Generate a unique S3 key for a document
  * @param {string} originalFilename - Original filename
  * @param {string} userId - User ID
@@ -108,6 +130,7 @@ module.exports = {
   generatePresignedUploadUrl,
   generatePresignedDownloadUrl,
   uploadBuffer,
+  downloadBuffer,
   deleteObject,
   generateS3Key,
 };

@@ -404,6 +404,243 @@ body {
   background: var(--bg);
 }
 
+/* Status badges */
+.status-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.status-pending {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.status-queued {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status-processing {
+  background: #fef3c7;
+  color: #b45309;
+  animation: pulse 2s infinite;
+}
+
+.status-completed {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.status-failed {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Notes button */
+.notes-btn {
+  background: #f3f4f6;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.notes-btn:hover {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+
+.document-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Notes Modal */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.notes-modal {
+  background: white;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.notes-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notes-modal-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  margin-right: 16px;
+}
+
+.notes-modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  min-height: 200px;
+}
+
+.notes-loading,
+.notes-error,
+.notes-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.notes-error {
+  color: var(--error);
+}
+
+.notes-status {
+  margin-top: 8px;
+}
+
+.notes-markdown {
+  line-height: 1.7;
+}
+
+.notes-markdown h1,
+.notes-markdown h2,
+.notes-markdown h3,
+.notes-markdown h4 {
+  margin-top: 24px;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.notes-markdown h1 { font-size: 24px; }
+.notes-markdown h2 { font-size: 20px; }
+.notes-markdown h3 { font-size: 16px; }
+
+.notes-markdown p {
+  margin-bottom: 16px;
+}
+
+.notes-markdown ul,
+.notes-markdown ol {
+  margin-bottom: 16px;
+  padding-left: 24px;
+}
+
+.notes-markdown li {
+  margin-bottom: 8px;
+}
+
+.notes-markdown code {
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.notes-markdown pre {
+  background: #f3f4f6;
+  padding: 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.notes-markdown pre code {
+  background: none;
+  padding: 0;
+}
+
+.notes-markdown blockquote {
+  border-left: 4px solid var(--primary);
+  padding-left: 16px;
+  margin: 16px 0;
+  color: var(--text-secondary);
+}
+
+.notes-markdown hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 24px 0;
+}
+
+.notes-modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: #f9fafb;
+  border-radius: 0 0 16px 16px;
+}
+
+.download-notes-btn {
+  color: var(--primary);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.download-notes-btn:hover {
+  text-decoration: underline;
+}
+
+.close-modal-btn {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.close-modal-btn:hover {
+  background: var(--primary-dark);
+}
+
 /* Footer */
 .footer {
   text-align: center;

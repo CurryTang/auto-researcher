@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import DocumentList from './components/DocumentList';
 import Settings from './components/Settings';
+import NotesModal from './components/NotesModal';
 
 // Default API URL - can be changed in settings
 const DEFAULT_API_URL = 'http://localhost:3000/api';
@@ -13,6 +14,7 @@ function App() {
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState(null);
   const [apiUrl, setApiUrl] = useState(() => {
     return localStorage.getItem('apiUrl') || DEFAULT_API_URL;
   });
@@ -119,6 +121,7 @@ function App() {
         <DocumentList
           documents={documents}
           onDownload={getDownloadUrl}
+          onViewNotes={(doc) => setSelectedDocument(doc)}
           loading={loading && documents.length === 0}
         />
 
@@ -149,6 +152,14 @@ function App() {
       <footer className="footer">
         <p>Auto Reader - Test Frontend</p>
       </footer>
+
+      {selectedDocument && (
+        <NotesModal
+          document={selectedDocument}
+          apiUrl={apiUrl}
+          onClose={() => setSelectedDocument(null)}
+        />
+      )}
     </div>
   );
 }

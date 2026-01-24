@@ -1,4 +1,6 @@
 require('dotenv').config();
+const path = require('path');
+const os = require('os');
 
 module.exports = {
   port: process.env.PORT || 3000,
@@ -18,5 +20,54 @@ module.exports = {
 
   cors: {
     origin: process.env.CORS_ORIGIN || '*',
+  },
+
+  // Document Reader Configuration
+  reader: {
+    enabled: process.env.READER_ENABLED !== 'false', // Enabled by default
+    scanIntervalMs: parseInt(process.env.READER_SCAN_INTERVAL_MS) || 30 * 60 * 1000, // 30 minutes
+    processIntervalMs: parseInt(process.env.READER_PROCESS_INTERVAL_MS) || 60 * 1000, // 1 minute
+    maxPerHour: parseInt(process.env.READER_MAX_PER_HOUR) || 5,
+    maxPageCount: parseInt(process.env.READER_MAX_PAGE_COUNT) || 40,
+    maxFileSizeMb: parseInt(process.env.READER_MAX_FILE_SIZE_MB) || 5,
+    defaultProvider: process.env.READER_DEFAULT_PROVIDER || 'gemini-cli',
+    tmpDir: process.env.READER_TMP_DIR || path.join(os.tmpdir(), 'auto-reader'),
+  },
+
+  // Mathpix API (for large PDF conversion)
+  mathpix: {
+    appId: process.env.MATHPIX_APP_ID,
+    appKey: process.env.MATHPIX_APP_KEY,
+  },
+
+  // Gemini CLI Configuration
+  geminiCli: {
+    path: process.env.GEMINI_CLI_PATH || 'gemini',
+  },
+
+  // LLM API Configuration (for fallback)
+  llm: {
+    gemini: {
+      apiKey: process.env.GEMINI_API_KEY,
+      model: process.env.GEMINI_MODEL || 'gemini-1.5-pro',
+    },
+    anthropic: {
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      model: process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20240229',
+    },
+    openai: {
+      apiKey: process.env.OPENAI_API_KEY,
+      model: process.env.OPENAI_MODEL || 'gpt-4-turbo',
+    },
+    qwen: {
+      apiKey: process.env.QWEN_API_KEY,
+      model: process.env.QWEN_MODEL || 'qwen-max',
+      baseUrl: process.env.QWEN_BASE_URL || 'https://dashscope.aliyuncs.com/api/v1',
+    },
+    deepseek: {
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      model: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+      baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
+    },
   },
 };

@@ -5,6 +5,10 @@ const config = require('./config');
 const routes = require('./routes');
 const { initDatabase } = require('./db');
 
+// Import reader services (for scheduler integration)
+const schedulerService = require('./services/scheduler.service');
+const readerService = require('./services/reader.service');
+
 const app = express();
 
 // Security middleware
@@ -35,6 +39,8 @@ app.get('/', (req, res) => {
       health: '/api/health',
       documents: '/api/documents',
       upload: '/api/upload',
+      reader: '/api/reader',
+      tags: '/api/tags',
     },
   });
 });
@@ -64,6 +70,15 @@ async function startServer() {
     await initDatabase();
     console.log('Connected to Turso database');
 
+    // Initialize document reader scheduler
+    if (config.reader?.enabled) {
+      schedulerService.setReaderService(readerService);
+      schedulerService.start();
+      console.log('Document reader scheduler started');
+    } else {
+      console.log('Document reader is disabled');
+    }
+
     app.listen(config.port, () => {
       console.log(`Server running on port ${config.port}`);
       console.log(`Environment: ${config.nodeEnv}`);
@@ -77,6 +92,13 @@ async function startServer() {
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
   console.log('Shutting down gracefully...');
+  schedulerService.stop();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('Received SIGTERM, shutting down...');
+  schedulerService.stop();
   process.exit(0);
 });
 

@@ -76,6 +76,119 @@ router.get('/:id/download', async (req, res) => {
   }
 });
 
+// GET /api/documents/:id/notes - Get notes URL and content for a document
+router.get('/:id/notes', async (req, res) => {
+  try {
+    const { getDb } = require('../db');
+    const s3Service = require('../services/s3.service');
+    const db = getDb();
+
+    const result = await db.execute({
+      sql: 'SELECT id, title, notes_s3_key, processing_status FROM documents WHERE id = ?',
+      args: [req.params.id],
+    });
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    const doc = result.rows[0];
+
+    if (!doc.notes_s3_key) {
+      // No processed notes yet
+      return res.json({
+        documentId: doc.id,
+        title: doc.title,
+        processingStatus: doc.processing_status,
+        hasNotes: false,
+        notesUrl: null,
+        notesContent: null,
+      });
+    }
+
+    // Get presigned URL for notes
+    const notesUrl = await s3Service.generatePresignedDownloadUrl(doc.notes_s3_key);
+
+    // Optionally fetch and return content inline (useful for frontend rendering)
+    let notesContent = null;
+    if (req.query.inline === 'true') {
+      try {
+        const buffer = await s3Service.downloadBuffer(doc.notes_s3_key);
+        notesContent = buffer.toString('utf-8');
+      } catch (error) {
+        console.error('Error fetching notes content:', error);
+      }
+    }
+
+    res.json({
+      documentId: doc.id,
+      title: doc.title,
+      processingStatus: doc.processing_status,
+      hasNotes: true,
+      notesUrl,
+      notesS3Key: doc.notes_s3_key,
+      notesContent,
+    });
+  } catch (error) {
+    console.error('Error getting notes:', error);
+    res.status(500).json({ error: 'Failed to get notes' });
+  }
+});
+
+// GET /api/documents/:id/processing-status - Get detailed processing status
+router.get('/:id/processing-status', async (req, res) => {
+  try {
+    const { getDb } = require('../db');
+    const db = getDb();
+
+    const result = await db.execute({
+      sql: `SELECT id, title, processing_status, page_count, processing_error,
+                   processing_started_at, processing_completed_at
+            FROM documents WHERE id = ?`,
+      args: [req.params.id],
+    });
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    const doc = result.rows[0];
+
+    // Get queue info if queued
+    let queueInfo = null;
+    if (doc.processing_status === 'queued') {
+      const queueResult = await db.execute({
+        sql: 'SELECT priority, retry_count, max_retries, scheduled_at FROM processing_queue WHERE document_id = ?',
+        args: [req.params.id],
+      });
+
+      if (queueResult.rows.length > 0) {
+        const q = queueResult.rows[0];
+        queueInfo = {
+          priority: q.priority,
+          retryCount: q.retry_count,
+          maxRetries: q.max_retries,
+          scheduledAt: q.scheduled_at,
+        };
+      }
+    }
+
+    res.json({
+      documentId: doc.id,
+      title: doc.title,
+      status: doc.processing_status,
+      pageCount: doc.page_count,
+      error: doc.processing_error,
+      startedAt: doc.processing_started_at,
+      completedAt: doc.processing_completed_at,
+      queueInfo,
+    });
+  } catch (error) {
+    console.error('Error getting processing status:', error);
+    res.status(500).json({ error: 'Failed to get processing status' });
+  }
+});
+
 // POST /api/documents - Create new document
 router.post('/', async (req, res) => {
   try {
