@@ -508,21 +508,20 @@ function renderSuggestions(query) {
 function renderAvailableTags() {
   availableTagsContainer.innerHTML = '';
 
-  allTags.forEach(tag => {
-    const isSelected = selectedTags.some(st => st.name === tag.name);
+  // Filter out already selected tags
+  const unselectedTags = allTags.filter(tag =>
+    !selectedTags.some(st => st.name === tag.name)
+  );
+
+  unselectedTags.forEach(tag => {
     const chip = document.createElement('div');
-    chip.className = `available-tag${isSelected ? ' selected' : ''}`;
-    chip.style.cssText = isSelected ? `background: ${tag.color}; border-color: ${tag.color};` : '';
+    chip.className = 'available-tag';
     chip.innerHTML = `
       <span class="color-dot" style="background: ${tag.color}"></span>
       <span>${tag.name}</span>
     `;
     chip.addEventListener('click', () => {
-      if (isSelected) {
-        removeTag(tag);
-      } else {
-        selectTag(tag);
-      }
+      selectTag(tag);
     });
     availableTagsContainer.appendChild(chip);
   });
