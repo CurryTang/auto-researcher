@@ -1,6 +1,5 @@
 require('dotenv').config();
 const path = require('path');
-const os = require('os');
 
 module.exports = {
   port: process.env.PORT || 3000,
@@ -31,7 +30,9 @@ module.exports = {
     maxPageCount: parseInt(process.env.READER_MAX_PAGE_COUNT) || 40,
     maxFileSizeMb: parseInt(process.env.READER_MAX_FILE_SIZE_MB) || 5,
     defaultProvider: process.env.READER_DEFAULT_PROVIDER || 'gemini-cli',
-    tmpDir: process.env.READER_TMP_DIR || path.join(os.tmpdir(), 'auto-reader'),
+    // Use project directory for tmp files - Gemini CLI can only access files within project
+    // Using 'processing' instead of 'tmp' to avoid .gitignore issues
+    tmpDir: process.env.READER_TMP_DIR || path.join(__dirname, '..', '..', 'processing'),
   },
 
   // Mathpix API (for large PDF conversion)

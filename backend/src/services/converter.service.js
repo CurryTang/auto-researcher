@@ -9,7 +9,7 @@ const puppeteer = require('puppeteer');
 async function convertUrlToPdf(url, options = {}) {
   const browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
   });
 
   try {
@@ -20,12 +20,20 @@ async function convertUrlToPdf(url, options = {}) {
 
     // Navigate to the URL with timeout
     await page.goto(url, {
-      waitUntil: 'networkidle2',
-      timeout: 30000,
+      waitUntil: 'networkidle0', // Wait until no network activity for 500ms
+      timeout: 60000,
     });
 
-    // Get page title
-    const title = await page.title();
+    // Wait a bit more for any late-loading content
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Get page title with fallback
+    let title = 'Untitled';
+    try {
+      title = await page.title();
+    } catch (e) {
+      console.warn('Could not get page title:', e.message);
+    }
 
     // Generate PDF
     const pdfBuffer = await page.pdf({

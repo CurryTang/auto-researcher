@@ -8,6 +8,7 @@ const { initDatabase } = require('./db');
 // Import reader services (for scheduler integration)
 const schedulerService = require('./services/scheduler.service');
 const readerService = require('./services/reader.service');
+const pdfService = require('./services/pdf.service');
 
 const app = express();
 
@@ -69,6 +70,10 @@ async function startServer() {
   try {
     await initDatabase();
     console.log('Connected to Turso database');
+
+    // Clean up any leftover temp files from previous sessions
+    // All raw files should only be stored in S3, not on the server
+    await pdfService.cleanupAllTmpFiles();
 
     // Initialize document reader scheduler
     if (config.reader?.enabled) {

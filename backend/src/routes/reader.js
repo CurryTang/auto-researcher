@@ -73,11 +73,14 @@ router.delete('/queue/:documentId', async (req, res) => {
 /**
  * POST /api/reader/process/:documentId
  * Trigger immediate processing of a document (bypasses scheduler, respects rate limit)
+ * Query params:
+ *   - force=true: Force reprocessing even if already completed
  */
 router.post('/process/:documentId', async (req, res) => {
   try {
     const { documentId } = req.params;
     const { provider, promptTemplateId } = req.body;
+    const force = req.query.force === 'true';
 
     // Check rate limit
     const canProcess = await queueService.canProcessMore();
@@ -107,8 +110,8 @@ router.post('/process/:documentId', async (req, res) => {
       return res.status(400).json({ error: 'Document is already being processed' });
     }
 
-    if (doc.processing_status === 'completed') {
-      return res.status(400).json({ error: 'Document has already been processed' });
+    if (doc.processing_status === 'completed' && !force) {
+      return res.status(400).json({ error: 'Document has already been processed. Use ?force=true to reprocess.' });
     }
 
     // Mark as processing

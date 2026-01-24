@@ -1,11 +1,43 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+// Parse YAML frontmatter from markdown content
+function parseFrontmatter(content) {
+  if (!content) return { metadata: null, content: '' };
+
+  const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n/;
+  const match = content.match(frontmatterRegex);
+
+  if (!match) return { metadata: null, content };
+
+  const frontmatter = match[1];
+  const markdownContent = content.slice(match[0].length);
+
+  // Parse simple YAML (key: value pairs)
+  const metadata = {};
+  frontmatter.split('\n').forEach(line => {
+    const colonIndex = line.indexOf(':');
+    if (colonIndex > 0) {
+      const key = line.slice(0, colonIndex).trim();
+      const value = line.slice(colonIndex + 1).trim();
+      metadata[key] = value;
+    }
+  });
+
+  return { metadata, content: markdownContent };
+}
 
 function NotesModal({ document, apiUrl, onClose }) {
   const [notes, setNotes] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Parse the notes content to separate frontmatter
+  const parsedNotes = useMemo(() => {
+    if (!notes?.notesContent) return null;
+    return parseFrontmatter(notes.notesContent);
+  }, [notes?.notesContent]);
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -96,10 +128,18 @@ function NotesModal({ document, apiUrl, onClose }) {
             </div>
           )}
 
-          {notes && notes.hasNotes && notes.notesContent && (
+          {notes && notes.hasNotes && parsedNotes && (
             <div className="notes-markdown">
+              {parsedNotes.metadata?.generated_at && (
+                <div className="notes-meta">
+                  <span className="meta-label">Generated:</span>
+                  <span className="meta-value">
+                    {new Date(parsedNotes.metadata.generated_at).toLocaleString()}
+                  </span>
+                </div>
+              )}
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {notes.notesContent}
+                {parsedNotes.content}
               </ReactMarkdown>
             </div>
           )}

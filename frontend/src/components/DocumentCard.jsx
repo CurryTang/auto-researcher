@@ -1,7 +1,8 @@
 import { useState } from 'react';
 
-function DocumentCard({ document, onDownload, onViewNotes }) {
+function DocumentCard({ document, onDownload, onViewNotes, onToggleRead }) {
   const [downloading, setDownloading] = useState(false);
+  const [togglingRead, setTogglingRead] = useState(false);
   const [error, setError] = useState(null);
 
   const handleDownload = async () => {
@@ -17,6 +18,17 @@ function DocumentCard({ document, onDownload, onViewNotes }) {
       console.error('Download error:', err);
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const handleToggleRead = async () => {
+    setTogglingRead(true);
+    try {
+      await onToggleRead(document);
+    } catch (err) {
+      console.error('Toggle read error:', err);
+    } finally {
+      setTogglingRead(false);
     }
   };
 
@@ -67,7 +79,7 @@ function DocumentCard({ document, onDownload, onViewNotes }) {
   const hasNotes = processingStatus === 'completed';
 
   return (
-    <div className="document-card">
+    <div className={`document-card ${document.isRead ? 'is-read' : ''}`}>
       <div className="document-info">
         <div className="document-header">
           <span className={`type-badge ${getTypeBadgeClass(document.type)}`}>
@@ -89,6 +101,14 @@ function DocumentCard({ document, onDownload, onViewNotes }) {
         )}
       </div>
       <div className="document-actions">
+        <button
+          className={`read-btn ${document.isRead ? 'is-read' : ''}`}
+          onClick={handleToggleRead}
+          disabled={togglingRead}
+          title={document.isRead ? 'Mark as unread' : 'Mark as read'}
+        >
+          {togglingRead ? '...' : document.isRead ? '✓' : '○'}
+        </button>
         <button
           className="notes-btn"
           onClick={() => onViewNotes(document)}

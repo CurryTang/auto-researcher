@@ -27,6 +27,8 @@ function rowToDocument(row) {
     processingError: row.processing_error,
     processingStartedAt: row.processing_started_at,
     processingCompletedAt: row.processing_completed_at,
+    // Read status
+    isRead: row.is_read === 1,
   };
 }
 

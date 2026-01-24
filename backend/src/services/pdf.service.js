@@ -1,12 +1,12 @@
 const fs = require('fs').promises;
 const path = require('path');
-const os = require('os');
 const { PDFDocument } = require('pdf-lib');
 const s3Service = require('./s3.service');
 const config = require('../config');
 
-// Temp directory for processing
-const TMP_DIR = config.reader?.tmpDir || path.join(os.tmpdir(), 'auto-reader');
+// Temp directory for processing - must be within project directory for Gemini CLI access
+// Gemini CLI can only access files within the project directory for security
+const TMP_DIR = config.reader?.tmpDir || path.join(__dirname, '..', '..', 'tmp');
 
 /**
  * Ensure temp directory exists
@@ -137,9 +137,41 @@ async function saveTruncatedPdf(buffer) {
 async function cleanupTmpFile(filePath) {
   try {
     await fs.unlink(filePath);
+    console.log(`[PDF Service] Cleaned up temp file: ${filePath}`);
   } catch (error) {
-    // File might not exist, ignore
-    console.warn(`[PDF Service] Could not delete temp file: ${filePath}`);
+    if (error.code === 'ENOENT') {
+      // File already deleted, that's fine
+      console.log(`[PDF Service] Temp file already deleted: ${filePath}`);
+    } else {
+      console.warn(`[PDF Service] Could not delete temp file: ${filePath}`, error.message);
+    }
+  }
+}
+
+/**
+ * Clean up all temp files in the processing directory
+ * Call this on server startup to ensure no leftover files
+ */
+async function cleanupAllTmpFiles() {
+  try {
+    await ensureTmpDir();
+    const files = await fs.readdir(TMP_DIR);
+
+    for (const file of files) {
+      const filePath = path.join(TMP_DIR, file);
+      try {
+        await fs.unlink(filePath);
+        console.log(`[PDF Service] Cleaned up leftover temp file: ${filePath}`);
+      } catch (err) {
+        console.warn(`[PDF Service] Could not delete leftover file: ${filePath}`, err.message);
+      }
+    }
+
+    if (files.length > 0) {
+      console.log(`[PDF Service] Cleaned up ${files.length} leftover temp files`);
+    }
+  } catch (error) {
+    console.warn('[PDF Service] Could not clean up temp directory:', error.message);
   }
 }
 
@@ -209,6 +241,7 @@ module.exports = {
   truncatePdf,
   saveTruncatedPdf,
   cleanupTmpFile,
+  cleanupAllTmpFiles,
   needsMathpixConversion,
   preparePdfForProcessing,
   ensureTmpDir,

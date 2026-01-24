@@ -107,6 +107,23 @@ body {
   gap: 16px;
 }
 
+/* Section titles */
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 8px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-title.read-section {
+  margin-top: 24px;
+  color: #9ca3af;
+}
+
 /* Document card */
 .document-card {
   background: var(--card-bg);
@@ -462,6 +479,48 @@ body {
   border-color: #d1d5db;
 }
 
+/* Read button */
+.read-btn {
+  background: #f3f4f6;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.read-btn:hover {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+
+.read-btn.is-read {
+  background: var(--success);
+  color: white;
+  border-color: var(--success);
+}
+
+.read-btn.is-read:hover {
+  background: #059669;
+  border-color: #059669;
+}
+
+/* Read document card styling */
+.document-card.is-read {
+  opacity: 0.7;
+  background: #f9fafb;
+}
+
+.document-card.is-read:hover {
+  opacity: 1;
+}
+
 .document-actions {
   display: flex;
   flex-direction: row;
@@ -540,6 +599,26 @@ body {
   margin-top: 8px;
 }
 
+.notes-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border-radius: 6px;
+  margin-bottom: 20px;
+  font-size: 13px;
+}
+
+.notes-meta .meta-label {
+  color: var(--text-secondary);
+}
+
+.notes-meta .meta-value {
+  color: var(--text);
+  font-weight: 500;
+}
+
 .notes-markdown {
   line-height: 1.7;
 }
@@ -551,6 +630,12 @@ body {
   margin-top: 24px;
   margin-bottom: 12px;
   font-weight: 600;
+}
+
+.notes-markdown > h1:first-child,
+.notes-markdown > h2:first-child,
+.notes-markdown > h3:first-child {
+  margin-top: 0;
 }
 
 .notes-markdown h1 { font-size: 24px; }

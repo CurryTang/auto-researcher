@@ -5,7 +5,7 @@ import Settings from './components/Settings';
 import NotesModal from './components/NotesModal';
 
 // Default API URL - can be changed in settings
-const DEFAULT_API_URL = 'http://localhost:3000/api';
+const DEFAULT_API_URL = 'http://138.68.5.132:3000/api';
 
 function App() {
   const [documents, setDocuments] = useState([]);
@@ -40,19 +40,22 @@ function App() {
         },
       });
 
-      const { documents: newDocs, total } = response.data;
+      const { documents: newDocs } = response.data;
+
+      // Filter out failed documents
+      const filteredDocs = newDocs.filter(doc => doc.processingStatus !== 'failed');
 
       if (reset) {
-        setDocuments(newDocs);
+        setDocuments(filteredDocs);
         setOffset(LIMIT);
       } else {
-        setDocuments((prev) => [...prev, ...newDocs]);
+        setDocuments((prev) => [...prev, ...filteredDocs]);
         setOffset((prev) => prev + LIMIT);
       }
 
       // Check if there are more documents to load
-      const totalLoaded = reset ? newDocs.length : documents.length + newDocs.length;
-      setHasMore(totalLoaded < total);
+      // If we got fewer docs than requested, we've reached the end
+      setHasMore(newDocs.length === LIMIT);
     } catch (err) {
       console.error('Failed to fetch documents:', err);
       setError(err.response?.data?.error || err.message || 'Failed to fetch documents');
@@ -82,6 +85,26 @@ function App() {
       return response.data.downloadUrl;
     } catch (err) {
       console.error('Failed to get download URL:', err);
+      throw err;
+    }
+  };
+
+  // Toggle read status for a document
+  const toggleReadStatus = async (document) => {
+    try {
+      const response = await axios.patch(`${apiUrl}/documents/${document.id}/read`);
+      const { isRead } = response.data;
+
+      // Update the document in state
+      setDocuments((prev) =>
+        prev.map((doc) =>
+          doc.id === document.id ? { ...doc, isRead } : doc
+        )
+      );
+
+      return isRead;
+    } catch (err) {
+      console.error('Failed to toggle read status:', err);
       throw err;
     }
   };
@@ -122,6 +145,7 @@ function App() {
           documents={documents}
           onDownload={getDownloadUrl}
           onViewNotes={(doc) => setSelectedDocument(doc)}
+          onToggleRead={toggleReadStatus}
           loading={loading && documents.length === 0}
         />
 

@@ -60,6 +60,7 @@ async function initDatabase() {
     { name: 'processing_error', definition: 'TEXT' },
     { name: 'processing_started_at', definition: 'DATETIME' },
     { name: 'processing_completed_at', definition: 'DATETIME' },
+    { name: 'is_read', definition: 'INTEGER DEFAULT 0' },
   ];
 
   for (const col of processingColumns) {

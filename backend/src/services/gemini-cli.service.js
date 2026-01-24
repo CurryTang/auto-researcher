@@ -38,17 +38,14 @@ async function readDocument(filePath, prompt, options = {}) {
   const timeoutMs = options.timeout || DEFAULT_TIMEOUT_MS;
 
   return new Promise((resolve, reject) => {
-    const args = [];
+    // Build the full prompt with file reference using @ syntax
+    // Gemini CLI uses @filepath to attach files to the prompt
+    const fullPrompt = `${prompt}\n\n@${filePath}`;
 
-    // Add the prompt
-    if (prompt) {
-      args.push('-p', prompt);
-    }
+    // Use positional prompt (the new preferred way, -p is deprecated)
+    const args = [fullPrompt];
 
-    // Add the file
-    args.push(filePath);
-
-    console.log(`[Gemini CLI] Running: ${geminiPath} ${args.join(' ')}`);
+    console.log(`[Gemini CLI] Running: ${geminiPath} with prompt referencing: ${filePath}`);
 
     const proc = spawn(geminiPath, args, {
       timeout: timeoutMs,

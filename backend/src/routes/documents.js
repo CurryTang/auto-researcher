@@ -251,4 +251,39 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+// PATCH /api/documents/:id/read - Toggle read status
+router.patch('/:id/read', async (req, res) => {
+  try {
+    const { getDb } = require('../db');
+    const db = getDb();
+
+    // Get current read status
+    const current = await db.execute({
+      sql: 'SELECT id, is_read FROM documents WHERE id = ?',
+      args: [req.params.id],
+    });
+
+    if (current.rows.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // Toggle read status (or set to specific value if provided)
+    const currentIsRead = current.rows[0].is_read || 0;
+    const newIsRead = req.body.isRead !== undefined ? (req.body.isRead ? 1 : 0) : (currentIsRead ? 0 : 1);
+
+    await db.execute({
+      sql: 'UPDATE documents SET is_read = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      args: [newIsRead, req.params.id],
+    });
+
+    res.json({
+      id: parseInt(req.params.id),
+      isRead: newIsRead === 1,
+    });
+  } catch (error) {
+    console.error('Error toggling read status:', error);
+    res.status(500).json({ error: 'Failed to update read status' });
+  }
+});
+
 module.exports = router;
