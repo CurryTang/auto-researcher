@@ -10,9 +10,9 @@ const typeSelect = document.getElementById('type');
 const notesInput = document.getElementById('notes');
 const fileInput = document.getElementById('fileInput');
 const fileNameDisplay = document.getElementById('fileName');
-const saveAsLinkBtn = document.getElementById('saveAsLink');
+const fileInfoDiv = document.getElementById('fileInfo');
+const uploadLabel = document.getElementById('uploadLabel');
 const saveAsPdfBtn = document.getElementById('saveAsPdf');
-const uploadFileBtn = document.getElementById('uploadFile');
 const statusDiv = document.getElementById('status');
 
 // Tag elements
@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     checkForPresets(), // Check all presets, not just arXiv
   ]);
   setupTagListeners();
+  setupFileListeners();
 });
 
 // Load stored settings (API URL and presets)
@@ -386,6 +387,54 @@ function setupTagListeners() {
   });
 }
 
+// Setup file input listeners
+function setupFileListeners() {
+  // File input handler - just preview, don't upload yet
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      selectedFile = file;
+      fileNameDisplay.textContent = file.name;
+      fileInfoDiv.style.display = 'flex';
+      uploadLabel.style.display = 'none';
+
+      // Disable URL field when file is selected
+      urlInput.disabled = true;
+      urlInput.style.opacity = '0.5';
+
+      // Auto-fill title from filename if empty
+      if (!titleInput.value) {
+        titleInput.value = file.name.replace(/\.[^/.]+$/, '');
+      }
+
+      // Update button text
+      saveAsPdfBtn.textContent = 'Upload File';
+    }
+  });
+
+  // Clear file button
+  const clearFileBtn = document.getElementById('clearFile');
+  if (clearFileBtn) {
+    clearFileBtn.addEventListener('click', clearSelectedFile);
+  }
+}
+
+// Clear selected file
+function clearSelectedFile() {
+  selectedFile = null;
+  fileInput.value = '';
+  fileNameDisplay.textContent = '';
+  fileInfoDiv.style.display = 'none';
+  uploadLabel.style.display = 'flex';
+
+  // Re-enable URL field
+  urlInput.disabled = false;
+  urlInput.style.opacity = '1';
+
+  // Reset button text
+  saveAsPdfBtn.textContent = 'Save as PDF';
+}
+
 // Render tag suggestions dropdown
 function renderSuggestions(query) {
   tagSuggestions.innerHTML = '';
@@ -547,66 +596,24 @@ function detectContentType(url) {
   return 'other';
 }
 
-// File input handler
-fileInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    selectedFile = file;
-    fileNameDisplay.textContent = file.name;
-    uploadFileBtn.disabled = false;
-
-    // Auto-fill title from filename if empty
-    if (!titleInput.value) {
-      titleInput.value = file.name.replace(/\.[^/.]+$/, '');
-    }
-  }
-});
-
-// Save as Link
-saveAsLinkBtn.addEventListener('click', async () => {
-  const data = getFormData();
-
-  if (!validateForm(data, false)) return;
-
-  setLoading(true, 'Saving link...');
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/documents`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: data.title,
-        type: data.type,
-        originalUrl: data.url,
-        s3Key: `links/${Date.now()}-${encodeURIComponent(data.title)}`,
-        tags: data.tags,
-        notes: data.notes,
-      }),
-    });
-
-    if (!response.ok) throw new Error('Failed to save');
-
-    showStatus('Link saved successfully!', 'success');
-    resetForm();
-  } catch (error) {
-    console.error('Save error:', error);
-    showStatus('Failed to save link. Please try again.', 'error');
-  } finally {
-    setLoading(false);
-  }
-});
-
-// Save as PDF
+// Save as PDF - handles both file upload and webpage conversion
 saveAsPdfBtn.addEventListener('click', async () => {
   const data = getFormData();
 
-  if (!validateForm(data, true)) return;
+  // If file is selected, upload it
+  if (selectedFile) {
+    await uploadFile(data);
+    return;
+  }
 
-  // If on arXiv page, use arXiv endpoint instead
+  // If on arXiv page, use arXiv endpoint
   if (currentArxivInfo && currentArxivInfo.isArxiv && currentArxivInfo.arxivId) {
     await saveArxivPaper();
     return;
   }
+
+  // Otherwise convert webpage to PDF
+  if (!validateForm(data, true)) return;
 
   setLoading(true, 'Converting to PDF...');
 
@@ -638,11 +645,9 @@ saveAsPdfBtn.addEventListener('click', async () => {
   }
 });
 
-// Upload file
-uploadFileBtn.addEventListener('click', async () => {
+// Upload file function
+async function uploadFile(data) {
   if (!selectedFile) return;
-
-  const data = getFormData();
 
   if (!data.title) {
     showStatus('Please enter a title', 'error');
@@ -657,7 +662,7 @@ uploadFileBtn.addEventListener('click', async () => {
     formData.append('title', data.title);
     formData.append('type', data.type);
     formData.append('tags', JSON.stringify(data.tags));
-    formData.append('notes', data.notes);
+    formData.append('notes', data.notes || '');
 
     const response = await fetch(`${API_BASE_URL}/upload/direct`, {
       method: 'POST',
@@ -665,25 +670,20 @@ uploadFileBtn.addEventListener('click', async () => {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to upload');
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to upload');
     }
 
     showStatus('File uploaded successfully!', 'success');
     resetForm();
-
-    // Reset file input
-    selectedFile = null;
-    fileInput.value = '';
-    fileNameDisplay.textContent = '';
-    uploadFileBtn.disabled = true;
+    clearSelectedFile();
   } catch (error) {
     console.error('Upload error:', error);
-    showStatus('Failed to upload file. Please try again.', 'error');
+    showStatus(error.message || 'Failed to upload file. Please try again.', 'error');
   } finally {
     setLoading(false);
   }
-});
+}
 
 // Get form data
 function getFormData() {
@@ -748,9 +748,7 @@ function showStatus(message, type) {
 
 // Set loading state
 function setLoading(loading, message = 'Loading...') {
-  saveAsLinkBtn.disabled = loading;
   saveAsPdfBtn.disabled = loading;
-  uploadFileBtn.disabled = loading || !selectedFile;
 
   // Also disable arXiv button if it exists
   const arxivBtn = document.getElementById('saveArxivPdf');

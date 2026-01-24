@@ -153,6 +153,7 @@ header h1 {
 
 .upload-section {
   text-align: center;
+  margin-bottom: 16px;
 }
 
 .upload-label {
@@ -185,8 +186,40 @@ header h1 {
 .file-name {
   font-size: 12px;
   color: #2563eb;
-  margin-top: 8px;
+  margin: 0;
   word-break: break-all;
+  flex: 1;
+  text-align: left;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+}
+
+.btn-clear-file {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.btn-clear-file:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.btn-full {
+  width: 100%;
 }
 
 .status {

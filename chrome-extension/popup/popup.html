@@ -52,28 +52,21 @@
         <textarea id="notes" name="notes" rows="3" placeholder="Add notes..."></textarea>
       </div>
 
-      <div class="button-group">
-        <button type="button" id="saveAsLink" class="btn btn-secondary">
-          Save Link
-        </button>
-        <button type="button" id="saveAsPdf" class="btn btn-primary">
-          Save as PDF
-        </button>
-      </div>
-
-      <div class="divider">
-        <span>or</span>
-      </div>
-
       <div class="upload-section">
-        <label for="fileInput" class="upload-label">
+        <label for="fileInput" class="upload-label" id="uploadLabel">
           <span class="upload-icon">📄</span>
-          <span>Upload Local File</span>
+          <span>Upload Local File (optional)</span>
           <input type="file" id="fileInput" accept=".pdf,.epub,.txt,.html" hidden>
         </label>
-        <p class="file-name" id="fileName"></p>
-        <button type="button" id="uploadFile" class="btn btn-upload" disabled>
-          Upload File
+        <div class="file-info" id="fileInfo" style="display: none;">
+          <p class="file-name" id="fileName"></p>
+          <button type="button" id="clearFile" class="btn-clear-file">✕</button>
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button type="button" id="saveAsPdf" class="btn btn-primary btn-full">
+          Save as PDF
         </button>
       </div>
     </form>
