@@ -123,7 +123,7 @@ async function loadSettings() {
   const result = await chrome.storage.local.get(['apiBaseUrl', 'presets']);
 
   // Load API URL
-  apiUrlInput.value = result.apiBaseUrl || 'http://localhost:3000/api';
+  apiUrlInput.value = result.apiBaseUrl || 'http://138.68.5.132:3000/api';
 
   // Load presets (use defaults if none saved)
   if (result.presets && result.presets.length > 0) {

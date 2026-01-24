@@ -1,5 +1,5 @@
 // Configuration - will be loaded from storage
-let API_BASE_URL = 'http://localhost:3000/api';
+let API_BASE_URL = 'http://138.68.5.132:3000/api';
 let storedPresets = [];
 let currentPreset = null; // Currently detected preset
 
