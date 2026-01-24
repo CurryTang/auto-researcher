@@ -122,8 +122,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadSettings() {
   const result = await chrome.storage.local.get(['apiBaseUrl', 'presets']);
 
-  // Load API URL
-  apiUrlInput.value = result.apiBaseUrl || 'http://138.68.5.132:3000/api';
+  // Load API URL - migrate from localhost if needed
+  let apiUrl = result.apiBaseUrl || 'http://138.68.5.132:3000/api';
+  if (apiUrl.includes('localhost')) {
+    apiUrl = 'http://138.68.5.132:3000/api';
+    // Auto-save the migration
+    await chrome.storage.local.set({ apiBaseUrl: apiUrl });
+  }
+  apiUrlInput.value = apiUrl;
 
   // Load presets (use defaults if none saved)
   if (result.presets && result.presets.length > 0) {

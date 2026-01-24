@@ -47,7 +47,14 @@ async function loadStoredSettings() {
     const result = await chrome.storage.local.get(['apiBaseUrl', 'presets']);
 
     if (result.apiBaseUrl) {
-      API_BASE_URL = result.apiBaseUrl;
+      // Migrate from localhost to production URL
+      if (result.apiBaseUrl.includes('localhost')) {
+        API_BASE_URL = 'http://138.68.5.132:3000/api';
+        // Save the new URL
+        await chrome.storage.local.set({ apiBaseUrl: API_BASE_URL });
+      } else {
+        API_BASE_URL = result.apiBaseUrl;
+      }
     }
 
     if (result.presets && result.presets.length > 0) {
