@@ -18,15 +18,9 @@ mermaid.initialize({
 });
 
 // Pre-process mermaid code to fix common issues
+// NOTE: Be very conservative - only fix obvious issues, don't break valid syntax
 function preprocessMermaidCode(code) {
   if (!code) return code;
-
-  // Quote subgraph names - but skip if already has ["label"] syntax
-  // Match: subgraph name (without brackets or quotes)
-  code = code.replace(/^(\s*subgraph\s+)(\w+)(\s*$)/gm, (match, prefix, name, suffix) => {
-    // Simple identifier without spaces - leave as is
-    return match;
-  });
 
   // For subgraph with spaces but no bracket label: subgraph My Name -> subgraph "My Name"
   // But NOT: subgraph name["label"] - that's already valid
@@ -45,45 +39,33 @@ function preprocessMermaidCode(code) {
     return `${prefix}"${trimmedName}"${suffix}`;
   });
 
-  // Fix node labels in square brackets: A[Label With Space] -> A["Label With Space"]
-  // But skip if already quoted: A["label"]
-  code = code.replace(/(\w+)\[([^\]"]+)\]/g, (match, nodeId, label) => {
+  // Fix node labels in square brackets ONLY if not already quoted
+  // A[Label With Space] -> A["Label With Space"]
+  // Skip: A["already quoted"]
+  code = code.replace(/^(\s*)(\w+)\[([^\]"]+)\]/gm, (match, indent, nodeId, label) => {
     // If label contains spaces or non-ASCII, quote it
     if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
-      return `${nodeId}["${label}"]`;
+      return `${indent}${nodeId}["${label}"]`;
     }
     return match;
   });
 
-  // Fix node labels in double parentheses (circles): A((Label)) -> A(("Label"))
-  code = code.replace(/(\w+)\(\(([^)"]+)\)\)/g, (match, nodeId, label) => {
+  // Fix node labels in double parentheses at line start only
+  // A((Label)) -> A(("Label"))
+  code = code.replace(/^(\s*)(\w+)\(\(([^)"]+)\)\)/gm, (match, indent, nodeId, label) => {
     if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
-      return `${nodeId}(("${label}"))`;
+      return `${indent}${nodeId}(("${label}"))`;
     }
     return match;
   });
 
-  // Fix node labels in single parentheses: A(Label With Space) -> A("Label With Space")
-  code = code.replace(/(\w+)\(([^()"]+)\)(?!\))/g, (match, nodeId, label) => {
-    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
-      return `${nodeId}("${label}")`;
-    }
-    return match;
-  });
+  // DO NOT transform single parentheses - too risky, breaks content inside quotes
 
   // Fix edge labels: |Label| patterns - quote if has spaces/non-ASCII
   // But skip if already quoted: |"label"|
   code = code.replace(/\|([^|"]+)\|/g, (match, label) => {
     if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
       return `|"${label}"|`;
-    }
-    return match;
-  });
-
-  // Fix edge labels with dashes: --Label--> patterns (not already quoted)
-  code = code.replace(/--([^"\s|>][^>]*?)-->/g, (match, label) => {
-    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
-      return `--"${label.trim()}"-->`;
     }
     return match;
   });
@@ -116,10 +98,13 @@ function MermaidDiagram({ code }) {
   }, [code]);
 
   if (error) {
+    // Fallback: show the raw code in a code block instead of error
     return (
-      <div className="mermaid-error">
-        <p>Diagram rendering failed</p>
-        <pre>{code}</pre>
+      <div className="mermaid-fallback">
+        <details>
+          <summary>Diagram (click to view source)</summary>
+          <pre className="code-block language-mermaid"><code>{code}</code></pre>
+        </details>
       </div>
     );
   }
