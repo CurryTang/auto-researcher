@@ -175,179 +175,78 @@ $$
 
 // ============== PROMPTS FOR CODE ANALYSIS ==============
 
-const CODE_ROUND_1_PROMPT = `你是一位专业的代码阅读助手。这是第一轮代码分析（仓库概览）。
+const CODE_ROUND_1_PROMPT = `你是一位专业的代码阅读助手。快速分析仓库结构。
+
+重要：请简洁回答，不要过度分析。只需要列出关键信息。
 
 ## 任务
-1. 读 README.md
-2. 扫描目录结构
-3. 识别入口文件
-4. 定位核心模块目录
+1. 读 README.md (只看安装和使用部分)
+2. 识别入口文件和核心模块
 
-请输出以下Markdown格式：
+请输出简短的Markdown：
 
 ### 基本信息
+- 语言:
+- 框架:
+- 入口文件:
+- 核心模块目录:
 
-| 属性 | 内容 |
-|-----|------|
-| 语言 | [Python/etc] |
-| 框架 | [PyTorch/TensorFlow/etc] |
-| Python版本 | [要求] |
-| 主要依赖 | [关键库] |
+### 关键文件
+| 功能 | 文件 |
+|-----|-----|
+| 模型 | |
+| 训练 | |
+| 数据 | |
 
-### 目录结构
-
-\`\`\`
-project/
-├── src/           # 源代码
-│   ├── model.py   # 模型定义
-│   ├── train.py   # 训练逻辑
-│   └── data.py    # 数据处理
-├── configs/       # 配置文件
-├── scripts/       # 脚本
-└── README.md
-\`\`\`
-
-### 关键文件定位
-
-| 功能 | 文件路径 |
-|-----|---------|
-| 入口 | |
-| 模型定义 | |
-| 数据处理 | |
-| 配置 | |
-| 训练逻辑 | |
-| 评估逻辑 | |
-
-### 入口点
-- 训练: [命令]
-- 推理: [命令]
-
-### 主要依赖
-- [依赖1]
-- [依赖2]
-
-### 仓库结构图 (Excalidraw JSON)
-
-\`\`\`excalidraw-repo_structure
-{
-  "type": "excalidraw",
-  "version": 2,
-  "elements": [
-    // 生成展示代码架构的Excalidraw元素
-  ]
-}
+### 运行命令
+\`\`\`bash
+# 训练
+# 推理
 \`\`\``;
 
-const CODE_ROUND_2_PROMPT = `你是一位专业的代码阅读助手。这是第二轮代码分析（数据接口）。
+const CODE_ROUND_2_PROMPT = `你是一位专业的代码阅读助手。快速分析数据接口。
 
-## 背景信息
-{previous_notes}
-
-## 任务
-分析数据接口设计，理解数据流。
-
-请输出以下Markdown格式：
-
-### 数据加载
-
-- **数据集类**: \`[ClassName]\`
-- **数据格式**: [描述数据格式]
-- **预处理步骤**:
-  1. [步骤1]
-  2. [步骤2]
-
-### 接口设计
-
-\`\`\`python
-# 模型输入格式
-input = {
-    'x': Tensor[B, C, H, W],  # 图像输入
-    'mask': Tensor[B, H, W],   # 可选掩码
-}
-
-# 模型输出格式
-output = {
-    'logits': Tensor[B, num_classes],
-    'features': Tensor[B, D],
-}
-\`\`\`
-
-### Tensor形状追踪
-
-\`\`\`
-输入: [B, C, H, W]
-  ↓ Encoder
-特征: [B, D, H/16, W/16]
-  ↓ Decoder
-输出: [B, num_classes]
-\`\`\`
-
-### 配置系统
-
-- **配置方式**: [argparse/yaml/hydra]
-- **关键配置项**:
-  - \`learning_rate\`:
-  - \`batch_size\`:
-  - \`num_epochs\`:`;
-
-const CODE_ROUND_3_PROMPT = `你是一位专业的代码阅读助手。这是第三轮代码分析（核心实现）。
-
-## 背景信息
-{previous_notes}
+重要：简洁回答，只列关键信息，不要详细分析每个文件。
 
 ## 任务
-深入分析关键方法实现，对照论文公式。
+找出数据处理逻辑和模型输入输出格式。
 
-请输出以下Markdown格式：
+请输出简短Markdown：
 
-### 关键类/函数
+### 数据处理
+- 数据集类:
+- 输入格式:
+- 输出格式:
 
-#### \`ClassName\` (path/to/file.py)
-
+### 模型接口
 \`\`\`python
-class ClassName:
-    """
-    [类的作用描述]
-
-    对应论文: Section X, Equation Y
-    """
-
-    def forward(self, x):
-        # [关键代码片段 + 注释]
-        pass
+# 输入/输出示例
 \`\`\`
 
-### 实现细节与Tricks
+### 关键配置
+- learning_rate:
+- batch_size:`;
 
-[论文中未提及，但代码中重要的实现细节]
+const CODE_ROUND_3_PROMPT = `你是一位专业的代码阅读助手。快速分析核心实现。
 
-1. [细节1]
-2. [细节2]
+重要：只关注最关键的1-2个类/函数，不要全面分析。简洁输出。
 
-### 代码与论文差异
+## 任务
+找出核心模型实现，描述关键方法。
 
-| 论文描述 | 代码实现 | 说明 |
-|---------|---------|------|
-| | | |
+请输出简短Markdown：
 
-### 复现指南
+### 核心类/函数
+\`\`\`python
+# 最关键的代码片段 (简化版)
+\`\`\`
 
-[复现时需要特别注意的点]
-
+### 实现要点
 1. [要点1]
 2. [要点2]
 
-### 代码架构图 (Excalidraw JSON)
-
-\`\`\`excalidraw-code_method
-{
-  "type": "excalidraw",
-  "version": 2,
-  "elements": [
-    // 生成详细的方法实现流程图
-  ]
-}
-\`\`\``;
+### 复现注意
+- [注意点]`;
 
 class AutoReaderService {
   constructor() {
