@@ -320,7 +320,7 @@ function App() {
       </main>
 
       <footer className="footer">
-        <p>Auto Reader - Test Frontend</p>
+        <p>Auto Reader</p>
       </footer>
 
       {selectedDocument && (
