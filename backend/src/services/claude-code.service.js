@@ -42,12 +42,14 @@ async function isAvailable() {
 async function analyzeRepository(repoDir, prompt, options = {}) {
   const claudePath = config.claudeCli?.path || 'claude';
   const timeoutMs = options.timeout || DEFAULT_TIMEOUT_MS;
+  const model = config.claudeCli?.model || 'claude-sonnet-4-5-20250514';
 
   return new Promise((resolve, reject) => {
     // Claude Code CLI uses -p for prompt and --print for non-interactive output
     const args = [
       '-p', prompt,
       '--print',  // Non-interactive, prints result and exits
+      '--model', model,  // Use specified model
     ];
 
     // Add --allowedTools if specified (for restricting tool usage)
@@ -55,7 +57,7 @@ async function analyzeRepository(repoDir, prompt, options = {}) {
       args.push('--allowedTools', options.allowedTools.join(','));
     }
 
-    console.log(`[Claude Code] Running in: ${repoDir}`);
+    console.log(`[Claude Code] Running in: ${repoDir} with model: ${model}`);
     console.log(`[Claude Code] Prompt: ${prompt.substring(0, 100)}...`);
 
     const proc = spawn(claudePath, args, {
