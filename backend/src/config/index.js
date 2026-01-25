@@ -46,6 +46,13 @@ module.exports = {
     path: process.env.GEMINI_CLI_PATH || 'gemini',
   },
 
+  // Claude Code CLI Configuration
+  claudeCli: {
+    path: process.env.CLAUDE_CLI_PATH || 'claude',
+    model: process.env.CLAUDE_CLI_MODEL || 'claude-sonnet-4-5-20250514',
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  },
+
   // LLM API Configuration (for fallback)
   llm: {
     gemini: {

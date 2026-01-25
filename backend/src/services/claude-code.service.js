@@ -171,14 +171,22 @@ ${sourceFilesContent}`;
 
     console.log(`[Claude Code] Running in: ${repoDir} with model: ${model}`);
 
+    // Build environment with API key if available
+    const spawnEnv = {
+      ...process.env,
+      CI: 'true',
+    };
+
+    // Pass ANTHROPIC_API_KEY if configured (for authentication)
+    if (config.claudeCli?.apiKey) {
+      spawnEnv.ANTHROPIC_API_KEY = config.claudeCli.apiKey;
+    }
+
     const proc = spawn(claudePath, args, {
       cwd: repoDir,
       timeout: timeoutMs,
       maxBuffer: 50 * 1024 * 1024,
-      env: {
-        ...process.env,
-        CI: 'true',
-      },
+      env: spawnEnv,
     });
 
     let stdout = '';
