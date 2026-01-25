@@ -173,61 +173,40 @@ $$
 }
 \`\`\``;
 
-// ============== PROMPTS FOR CODE ANALYSIS ==============
+// ============== PROMPT FOR CODE ANALYSIS (SINGLE ROUND) ==============
 
-const CODE_ROUND_1_PROMPT = `你是代码阅读助手。分析这个仓库的基本结构。
+const CODE_ANALYSIS_PROMPT = `你是代码阅读助手。请全面分析这个代码仓库。
 
 任务：
-1. 读README.md了解项目
-2. 找出入口文件和核心目录
+1. 阅读README.md了解项目概况
+2. 分析仓库结构和核心代码
+3. 理解数据处理和模型实现
 
-输出格式：
-### 基本信息
+请按以下格式输出分析结果：
+
+## 基本信息
 - 语言/框架:
 - 入口文件:
 - 核心目录:
 
-### 运行命令
+## 运行命令
 - 安装:
 - 训练:
+- 主要依赖: (3-5个关键依赖)
 
-### 主要依赖
-- (列出3-5个关键依赖)`;
-
-const CODE_ROUND_2_PROMPT = `基于上轮分析，找出数据处理逻辑。
-
-{previous_notes}
-
-任务：找出数据加载和预处理代码
-
-输出格式：
-### 数据处理
+## 数据处理
 - 数据集类: (类名和文件路径)
 - 数据格式: (输入数据的格式)
+- 模型输入: (Tensor形状)
+- 模型输出: (Tensor形状)
 
-### 模型接口
-- 输入: (Tensor形状)
-- 输出: (Tensor形状)
+## 核心模型
+- 模型类: (文件路径)
+- forward方法: (简述功能)
+- 关键实现: (1-2个技术要点)
 
-### 关键配置
-- (列出重要的超参数)`;
-
-const CODE_ROUND_3_PROMPT = `基于上轮分析，深入核心模型实现。
-
-{previous_notes}
-
-任务：找出核心模型类的实现细节
-
-输出格式：
-### 核心模型
-- 类名: (文件路径)
-- forward方法: (简述做什么)
-
-### 关键实现
-- (描述1-2个关键技术点)
-
-### 复现注意
-- (列出复现时需要注意的点)`;
+## 复现注意
+- (列出复现时需要注意的关键点)`;
 
 class AutoReaderService {
   constructor() {
@@ -650,32 +629,18 @@ generated_at: ${now.toISOString()}
 
 `, 'utf-8');
 
-      // Use Claude Code CLI for code analysis (3 rounds)
+      // Use Claude Code CLI for code analysis (single comprehensive round)
       console.log('[AutoReader] Using Claude Code CLI for code analysis');
 
-      // Round 1: 仓库概览 (with repo structure context)
-      console.log('[AutoReader] === 第一轮：仓库概览 ===');
+      // Single round: Comprehensive analysis
+      console.log('[AutoReader] === 代码分析 ===');
       const repoStructure = await this.getRepoStructure(repoDir);
-      const round1Prompt = CODE_ROUND_1_PROMPT + '\n\n## 代码目录结构:\n```\n' + repoStructure + '\n```';
-      const round1Result = await claudeCodeService.analyzeRepository(repoDir, round1Prompt);
-      await this.appendToNotesFile(codeNotesPath, '---\n\n## 第一轮：仓库概览\n\n' + round1Result.text);
-
-      // Round 2: 数据接口
-      console.log('[AutoReader] === 第二轮：数据接口 ===');
-      const currentCodeNotes = await fs.readFile(codeNotesPath, 'utf-8');
-      const round2Prompt = CODE_ROUND_2_PROMPT.replace('{previous_notes}', currentCodeNotes);
-      const round2Result = await claudeCodeService.analyzeRepository(repoDir, round2Prompt);
-      await this.appendToNotesFile(codeNotesPath, '\n\n---\n\n## 第二轮：数据接口\n\n' + round2Result.text);
-
-      // Round 3: 核心实现
-      console.log('[AutoReader] === 第三轮：核心实现 ===');
-      const updatedCodeNotes = await fs.readFile(codeNotesPath, 'utf-8');
-      const round3Prompt = CODE_ROUND_3_PROMPT.replace('{previous_notes}', updatedCodeNotes);
-      const round3Result = await claudeCodeService.analyzeRepository(repoDir, round3Prompt);
-      await this.appendToNotesFile(codeNotesPath, '\n\n---\n\n## 第三轮：核心实现\n\n' + round3Result.text);
+      const analysisPrompt = CODE_ANALYSIS_PROMPT + '\n\n## 代码目录结构:\n```\n' + repoStructure + '\n```';
+      const analysisResult = await claudeCodeService.analyzeRepository(repoDir, analysisPrompt);
+      await this.appendToNotesFile(codeNotesPath, '---\n\n' + analysisResult.text);
 
       // Extract and convert code figures
-      const allText = round1Result.text + round3Result.text;
+      const allText = analysisResult.text;
       const codeFigures = await this.extractAndConvertFigures(allText, `${documentId}_code`);
 
       // Add reading log
@@ -685,9 +650,9 @@ generated_at: ${now.toISOString()}
 
 ## 阅读日志
 
-| 日期 | 轮次 | 耗时 | 备注 |
-|-----|------|------|------|
-| ${dateStr} | 1-3 | Auto | 自动处理完成 |
+| 日期 | 备注 |
+|-----|------|
+| ${dateStr} | 自动处理完成 |
 `);
 
       // Generate final code notes
