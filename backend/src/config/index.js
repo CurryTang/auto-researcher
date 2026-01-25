@@ -5,6 +5,13 @@ module.exports = {
   port: process.env.PORT || 3000,
   nodeEnv: process.env.NODE_ENV || 'development',
 
+  // Authentication
+  auth: {
+    enabled: process.env.AUTH_ENABLED !== 'false', // Enabled by default
+    adminToken: process.env.ADMIN_TOKEN,
+    salt: process.env.AUTH_SALT || 'auto-reader-secure-salt-2024',
+  },
+
   turso: {
     url: process.env.TURSO_DATABASE_URL || 'file:local.db',
     authToken: process.env.TURSO_AUTH_TOKEN || '',

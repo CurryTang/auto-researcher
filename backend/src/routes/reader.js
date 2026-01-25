@@ -3,6 +3,7 @@ const router = express.Router();
 const queueService = require('../services/queue.service');
 const schedulerService = require('../services/scheduler.service');
 const readerService = require('../services/reader.service');
+const { requireAuth } = require('../middleware/auth');
 
 /**
  * GET /api/reader/modes
@@ -54,13 +55,13 @@ router.get('/queue/status', async (req, res) => {
 
 /**
  * POST /api/reader/queue/:documentId
- * Manually add a document to the processing queue
+ * Manually add a document to the processing queue (requires auth)
  * Body params:
  *   - priority: number (default 0)
  *   - readerMode: 'vanilla' | 'auto_reader' (default 'vanilla')
  *   - codeUrl: string (optional - URL to code repository)
  */
-router.post('/queue/:documentId', async (req, res) => {
+router.post('/queue/:documentId', requireAuth, async (req, res) => {
   try {
     const { documentId } = req.params;
     const { priority = 0, readerMode = 'vanilla', codeUrl } = req.body;
@@ -94,9 +95,9 @@ router.post('/queue/:documentId', async (req, res) => {
 
 /**
  * DELETE /api/reader/queue/:documentId
- * Remove a document from the processing queue
+ * Remove a document from the processing queue (requires auth)
  */
-router.delete('/queue/:documentId', async (req, res) => {
+router.delete('/queue/:documentId', requireAuth, async (req, res) => {
   try {
     const { documentId } = req.params;
     const { getDb } = require('../db');
@@ -123,7 +124,7 @@ router.delete('/queue/:documentId', async (req, res) => {
 
 /**
  * POST /api/reader/process/:documentId
- * Trigger immediate processing of a document (bypasses scheduler, respects rate limit)
+ * Trigger immediate processing of a document (bypasses scheduler, respects rate limit) (requires auth)
  * Query params:
  *   - force=true: Force reprocessing even if already completed
  * Body params:
@@ -132,7 +133,7 @@ router.delete('/queue/:documentId', async (req, res) => {
  *   - readerMode: 'vanilla' | 'auto_reader' (default from document or 'vanilla')
  *   - codeUrl: string (optional - URL to code repository)
  */
-router.post('/process/:documentId', async (req, res) => {
+router.post('/process/:documentId', requireAuth, async (req, res) => {
   try {
     const { documentId } = req.params;
     const { provider, promptTemplateId, readerMode, codeUrl } = req.body;
@@ -252,9 +253,9 @@ router.post('/process/:documentId', async (req, res) => {
 
 /**
  * POST /api/reader/scan
- * Trigger an immediate scan for new documents
+ * Trigger an immediate scan for new documents (requires auth)
  */
-router.post('/scan', async (req, res) => {
+router.post('/scan', requireAuth, async (req, res) => {
   try {
     const result = await schedulerService.runImmediateScan();
     res.json(result);
@@ -317,9 +318,9 @@ router.get('/templates/:id', async (req, res) => {
 
 /**
  * POST /api/reader/templates
- * Create a new prompt template
+ * Create a new prompt template (requires auth)
  */
-router.post('/templates', async (req, res) => {
+router.post('/templates', requireAuth, async (req, res) => {
   try {
     const { name, description, systemPrompt, userPrompt, isDefault, userId } = req.body;
 
@@ -345,9 +346,9 @@ router.post('/templates', async (req, res) => {
 
 /**
  * PUT /api/reader/templates/:id
- * Update a prompt template
+ * Update a prompt template (requires auth)
  */
-router.put('/templates/:id', async (req, res) => {
+router.put('/templates/:id', requireAuth, async (req, res) => {
   try {
     const { name, description, systemPrompt, userPrompt, isDefault } = req.body;
 
@@ -368,9 +369,9 @@ router.put('/templates/:id', async (req, res) => {
 
 /**
  * DELETE /api/reader/templates/:id
- * Delete a prompt template
+ * Delete a prompt template (requires auth)
  */
-router.delete('/templates/:id', async (req, res) => {
+router.delete('/templates/:id', requireAuth, async (req, res) => {
   try {
     await readerService.deletePromptTemplate(parseInt(req.params.id));
     res.json({ success: true });

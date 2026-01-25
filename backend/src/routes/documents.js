@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const documentService = require('../services/document.service');
+const { requireAuth } = require('../middleware/auth');
 
 // GET /api/documents - List all documents with pagination
 router.get('/', async (req, res) => {
@@ -236,8 +237,8 @@ router.get('/:id/processing-status', async (req, res) => {
   }
 });
 
-// POST /api/documents - Create new document
-router.post('/', async (req, res) => {
+// POST /api/documents - Create new document (requires auth)
+router.post('/', requireAuth, async (req, res) => {
   try {
     const { title, type, originalUrl, s3Key, s3Url, fileSize, mimeType, tags, notes, readerMode } =
       req.body;
@@ -267,8 +268,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// PUT /api/documents/:id - Update document
-router.put('/:id', async (req, res) => {
+// PUT /api/documents/:id - Update document (requires auth)
+router.put('/:id', requireAuth, async (req, res) => {
   try {
     const document = await documentService.updateDocument(req.params.id, req.body);
 
@@ -283,8 +284,8 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/documents/:id - Delete document
-router.delete('/:id', async (req, res) => {
+// DELETE /api/documents/:id - Delete document (requires auth)
+router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const deleted = await documentService.deleteDocument(req.params.id);
 
@@ -299,8 +300,8 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// POST /api/documents/:id/detect-code - Detect code URL for existing document
-router.post('/:id/detect-code', async (req, res) => {
+// POST /api/documents/:id/detect-code - Detect code URL for existing document (requires auth)
+router.post('/:id/detect-code', requireAuth, async (req, res) => {
   try {
     const { getDb } = require('../db');
     const arxivService = require('../services/arxiv.service');
@@ -356,8 +357,8 @@ router.post('/:id/detect-code', async (req, res) => {
   }
 });
 
-// PATCH /api/documents/:id/read - Toggle read status
-router.patch('/:id/read', async (req, res) => {
+// PATCH /api/documents/:id/read - Toggle read status (requires auth)
+router.patch('/:id/read', requireAuth, async (req, res) => {
   try {
     const { getDb } = require('../db');
     const db = getDb();
@@ -391,8 +392,8 @@ router.patch('/:id/read', async (req, res) => {
   }
 });
 
-// POST /api/documents/:id/reading-history - Record a read with name and date
-router.post('/:id/reading-history', async (req, res) => {
+// POST /api/documents/:id/reading-history - Record a read with name and date (requires auth)
+router.post('/:id/reading-history', requireAuth, async (req, res) => {
   try {
     const { getDb } = require('../db');
     const db = getDb();

@@ -5,6 +5,7 @@ const s3Service = require('../services/s3.service');
 const documentService = require('../services/document.service');
 const converterService = require('../services/converter.service');
 const arxivService = require('../services/arxiv.service');
+const { requireAuth } = require('../middleware/auth');
 
 // Configure multer for memory storage
 const upload = multer({
@@ -27,8 +28,8 @@ const upload = multer({
   },
 });
 
-// POST /api/upload/presigned - Get presigned URL for direct upload
-router.post('/presigned', async (req, res) => {
+// POST /api/upload/presigned - Get presigned URL for direct upload (requires auth)
+router.post('/presigned', requireAuth, async (req, res) => {
   try {
     const { filename, contentType } = req.body;
 
@@ -52,8 +53,8 @@ router.post('/presigned', async (req, res) => {
   }
 });
 
-// POST /api/upload/direct - Direct file upload through server
-router.post('/direct', upload.single('file'), async (req, res) => {
+// POST /api/upload/direct - Direct file upload through server (requires auth)
+router.post('/direct', requireAuth, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -90,8 +91,8 @@ router.post('/direct', upload.single('file'), async (req, res) => {
   }
 });
 
-// POST /api/upload/webpage - Convert webpage to PDF and save
-router.post('/webpage', async (req, res) => {
+// POST /api/upload/webpage - Convert webpage to PDF and save (requires auth)
+router.post('/webpage', requireAuth, async (req, res) => {
   try {
     const { url, title, type, tags, notes } = req.body;
 
@@ -132,8 +133,8 @@ router.post('/webpage', async (req, res) => {
   }
 });
 
-// POST /api/upload/arxiv - Fetch arXiv paper PDF and save
-router.post('/arxiv', async (req, res) => {
+// POST /api/upload/arxiv - Fetch arXiv paper PDF and save (requires auth)
+router.post('/arxiv', requireAuth, async (req, res) => {
   try {
     const { url, paperId, title, tags, notes } = req.body;
 

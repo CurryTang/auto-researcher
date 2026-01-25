@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const codeAnalysisService = require('../services/code-analysis.service');
+const { requireAuth } = require('../middleware/auth');
 
 /**
  * GET /api/code-analysis/status
@@ -96,9 +97,9 @@ router.get('/:documentId', async (req, res) => {
 
 /**
  * POST /api/code-analysis/:documentId
- * Queue a document for code analysis
+ * Queue a document for code analysis (requires auth)
  */
-router.post('/:documentId', async (req, res) => {
+router.post('/:documentId', requireAuth, async (req, res) => {
   try {
     const { documentId } = req.params;
     const result = await codeAnalysisService.queueAnalysis(parseInt(documentId));
@@ -116,9 +117,9 @@ router.post('/:documentId', async (req, res) => {
 
 /**
  * DELETE /api/code-analysis/:documentId
- * Remove a document from the code analysis queue
+ * Remove a document from the code analysis queue (requires auth)
  */
-router.delete('/:documentId', async (req, res) => {
+router.delete('/:documentId', requireAuth, async (req, res) => {
   try {
     const { documentId } = req.params;
     const { getDb } = require('../db');

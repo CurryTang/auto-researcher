@@ -31,6 +31,39 @@ NODE_ENV=production
 CORS_ORIGIN=https://yourdomain.github.io,https://yourdomain.com
 ```
 
+### Authentication
+
+The application uses token-based authentication to protect write operations.
+
+```bash
+# Admin token for write operations (required)
+ADMIN_TOKEN=your-secret-token-here
+
+# Optional: custom salt for token hashing (defaults to a secure value)
+AUTH_SALT=your-custom-salt
+
+# Optional: disable auth entirely (not recommended for production)
+AUTH_ENABLED=true
+```
+
+**Generating a secure token:**
+```bash
+# Using OpenSSL
+openssl rand -hex 32
+
+# Using Node.js
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+**Protected endpoints:**
+- All POST, PUT, DELETE, PATCH operations require authentication
+- GET operations (viewing documents, notes) remain public
+
+**Using the token:**
+- **Frontend:** Click "Login" button in the header and enter your token
+- **Extension:** No token needed (Chrome extensions are automatically trusted)
+- **API:** Include `Authorization: Bearer <token>` header
+
 ### Rate Limiting
 
 Control API rate limits to prevent abuse:
@@ -152,19 +185,20 @@ export default defineConfig({
 
 ## Chrome Extension Configuration
 
-### API Endpoint
+### Settings
 
-Edit `extension/background.js`:
+Open extension settings (click gear icon) to configure:
 
-```javascript
-const API_BASE = 'https://your-api-domain.com/api';
-```
+1. **Backend API URL** - Your Auto Reader server URL
+2. **Presets** - Site-specific detection patterns (arXiv, IEEE, etc.)
+
+Note: The extension doesn't require authentication since it runs locally on your machine. The backend automatically trusts requests from Chrome extensions.
 
 ### Permissions
 
 The extension requires these permissions in `manifest.json`:
 - `activeTab` - Access current tab
-- `storage` - Store settings
+- `storage` - Store settings and auth token
 - `host_permissions` - Access paper websites
 
 ## PM2 Configuration

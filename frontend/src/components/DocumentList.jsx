@@ -10,43 +10,18 @@ function DocumentList({ documents, onDownload, onViewNotes, onToggleRead, onTrig
     );
   }
 
-  // Separate read and unread documents
-  const unreadDocs = documents.filter(doc => !doc.isRead);
-  const readDocs = documents.filter(doc => doc.isRead);
-
   return (
     <div className="document-list">
-      {unreadDocs.length > 0 && (
-        <>
-          <h2 className="section-title">Unread ({unreadDocs.length})</h2>
-          {unreadDocs.map((doc) => (
-            <DocumentCard
-              key={doc.id}
-              document={doc}
-              onDownload={onDownload}
-              onViewNotes={onViewNotes}
-              onToggleRead={onToggleRead}
-              onTriggerCodeAnalysis={onTriggerCodeAnalysis}
-            />
-          ))}
-        </>
-      )}
-
-      {readDocs.length > 0 && (
-        <>
-          <h2 className="section-title read-section">Read ({readDocs.length})</h2>
-          {readDocs.map((doc) => (
-            <DocumentCard
-              key={doc.id}
-              document={doc}
-              onDownload={onDownload}
-              onViewNotes={onViewNotes}
-              onToggleRead={onToggleRead}
-              onTriggerCodeAnalysis={onTriggerCodeAnalysis}
-            />
-          ))}
-        </>
-      )}
+      {documents.map((doc) => (
+        <DocumentCard
+          key={doc.id}
+          document={doc}
+          onDownload={onDownload}
+          onViewNotes={onViewNotes}
+          onToggleRead={onToggleRead}
+          onTriggerCodeAnalysis={onTriggerCodeAnalysis}
+        />
+      ))}
     </div>
   );
 }

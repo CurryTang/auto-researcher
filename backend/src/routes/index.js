@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { verifyToken } = require('../middleware/auth');
 
 const documentsRouter = require('./documents');
 const uploadRouter = require('./upload');
@@ -17,5 +18,8 @@ router.use('/code-analysis', codeAnalysisRouter);
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Auth verification endpoint
+router.get('/auth/verify', verifyToken);
 
 module.exports = router;

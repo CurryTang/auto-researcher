@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import DocumentList from './components/DocumentList';
 import NotesModal from './components/NotesModal';
+import LoginModal from './components/LoginModal';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // API URL - hardcoded for production (HTTPS)
 const API_URL = 'https://auto-reader.duckdns.org/api';
 
-function App() {
+function AppContent() {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -14,6 +16,7 @@ function App() {
   const [offset, setOffset] = useState(0);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [initialNotesTab, setInitialNotesTab] = useState('paper');
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -21,6 +24,8 @@ function App() {
   const [selectedTag, setSelectedTag] = useState(null);
   const [readFilter, setReadFilter] = useState('all'); // 'all', 'unread', 'read'
   const [showFilters, setShowFilters] = useState(false);
+
+  const { isAuthenticated, isLoading: authLoading, logout, getAuthHeaders } = useAuth();
 
   const LIMIT = 5;
 
@@ -118,10 +123,19 @@ function App() {
     }
   };
 
-  // Toggle read status for a document
+  // Toggle read status for a document (requires auth)
   const toggleReadStatus = async (document) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      throw new Error('Authentication required');
+    }
+
     try {
-      const response = await axios.patch(`${API_URL}/documents/${document.id}/read`);
+      const response = await axios.patch(
+        `${API_URL}/documents/${document.id}/read`,
+        {},
+        { headers: getAuthHeaders() }
+      );
       const { isRead } = response.data;
 
       // Update the document in state
@@ -134,14 +148,26 @@ function App() {
       return isRead;
     } catch (err) {
       console.error('Failed to toggle read status:', err);
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        setShowLoginModal(true);
+      }
       throw err;
     }
   };
 
-  // Trigger code analysis for a document
+  // Trigger code analysis for a document (requires auth)
   const triggerCodeAnalysis = async (document) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      throw new Error('Authentication required');
+    }
+
     try {
-      const response = await axios.post(`${API_URL}/code-analysis/${document.id}`);
+      const response = await axios.post(
+        `${API_URL}/code-analysis/${document.id}`,
+        {},
+        { headers: getAuthHeaders() }
+      );
 
       // Update the document in state with new status
       setDocuments((prev) =>
@@ -153,6 +179,12 @@ function App() {
       return response.data;
     } catch (err) {
       console.error('Failed to trigger code analysis:', err);
+
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        setShowLoginModal(true);
+        throw new Error('Authentication required');
+      }
+
       const message = err.response?.data?.message || err.response?.data?.error || 'Failed to queue analysis';
 
       // If already in progress, update the UI to show processing state
@@ -171,6 +203,25 @@ function App() {
       throw error;
     }
   };
+
+  const handleAuthClick = () => {
+    if (isAuthenticated) {
+      logout();
+    } else {
+      setShowLoginModal(true);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="app">
+        <div className="loading-container">
+          <div className="spinner"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -206,6 +257,13 @@ function App() {
             title="Search & Filter"
           >
             🔍
+          </button>
+          <button
+            className={`auth-btn ${isAuthenticated ? 'logged-in' : ''}`}
+            onClick={handleAuthClick}
+            title={isAuthenticated ? 'Logout' : 'Login'}
+          >
+            {isAuthenticated ? '🔓 Admin' : '🔒 Login'}
           </button>
         </div>
       </header>
@@ -288,6 +346,7 @@ function App() {
           onToggleRead={toggleReadStatus}
           onTriggerCodeAnalysis={triggerCodeAnalysis}
           loading={loading && documents.length === 0}
+          isAuthenticated={isAuthenticated}
         />
 
         {documents.length > 0 && hasMore && !searchQuery && !selectedTag && (
@@ -324,7 +383,7 @@ function App() {
       </main>
 
       <footer className="footer">
-        <p>Auto Reader</p>
+        <p>Auto Reader {isAuthenticated && '(Admin Mode)'}</p>
       </footer>
 
       {selectedDocument && (
@@ -335,7 +394,19 @@ function App() {
           onClose={() => setSelectedDocument(null)}
         />
       )}
+
+      {showLoginModal && (
+        <LoginModal onClose={() => setShowLoginModal(false)} />
+      )}
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider apiUrl={API_URL}>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
