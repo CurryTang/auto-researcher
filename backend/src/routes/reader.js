@@ -5,6 +5,35 @@ const schedulerService = require('../services/scheduler.service');
 const readerService = require('../services/reader.service');
 
 /**
+ * GET /api/reader/modes
+ * Get available reader modes
+ */
+router.get('/modes', (req, res) => {
+  res.json({
+    modes: [
+      {
+        id: 'vanilla',
+        name: 'Vanilla Summary',
+        description: 'Basic paper summary with key points (English output)',
+        features: ['Single pass', 'Key contributions', 'Methodology', 'Results'],
+      },
+      {
+        id: 'auto_reader',
+        name: 'Auto Reader',
+        description: 'Multi-pass deep reading with code analysis (Chinese output)',
+        features: [
+          '3-pass paper reading',
+          'Mathematical framework extraction',
+          'Excalidraw figure generation',
+          'Code repository analysis (if available)',
+          '中文输出',
+        ],
+      },
+    ],
+  });
+});
+
+/**
  * GET /api/reader/queue/status
  * Get the current queue status and rate limit info
  */
@@ -26,15 +55,37 @@ router.get('/queue/status', async (req, res) => {
 /**
  * POST /api/reader/queue/:documentId
  * Manually add a document to the processing queue
+ * Body params:
+ *   - priority: number (default 0)
+ *   - readerMode: 'vanilla' | 'auto_reader' (default 'vanilla')
+ *   - codeUrl: string (optional - URL to code repository)
  */
 router.post('/queue/:documentId', async (req, res) => {
   try {
     const { documentId } = req.params;
-    const { priority = 0 } = req.body;
+    const { priority = 0, readerMode = 'vanilla', codeUrl } = req.body;
+
+    // Update document with reader mode and code URL before queuing
+    const { getDb } = require('../db');
+    const db = getDb();
+
+    await db.execute({
+      sql: `UPDATE documents SET
+              reader_mode = ?,
+              code_url = ?,
+              has_code = ?,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?`,
+      args: [readerMode, codeUrl || null, codeUrl ? 1 : 0, parseInt(documentId)],
+    });
 
     const result = await queueService.enqueueDocument(parseInt(documentId), priority);
 
-    res.json(result);
+    res.json({
+      ...result,
+      readerMode,
+      codeUrl,
+    });
   } catch (error) {
     console.error('Error enqueueing document:', error);
     res.status(400).json({ error: error.message });
@@ -75,11 +126,16 @@ router.delete('/queue/:documentId', async (req, res) => {
  * Trigger immediate processing of a document (bypasses scheduler, respects rate limit)
  * Query params:
  *   - force=true: Force reprocessing even if already completed
+ * Body params:
+ *   - provider: string (optional)
+ *   - promptTemplateId: number (optional)
+ *   - readerMode: 'vanilla' | 'auto_reader' (default from document or 'vanilla')
+ *   - codeUrl: string (optional - URL to code repository)
  */
 router.post('/process/:documentId', async (req, res) => {
   try {
     const { documentId } = req.params;
-    const { provider, promptTemplateId } = req.body;
+    const { provider, promptTemplateId, readerMode, codeUrl } = req.body;
     const force = req.query.force === 'true';
 
     // Check rate limit
@@ -96,7 +152,7 @@ router.post('/process/:documentId', async (req, res) => {
     const db = getDb();
 
     const docResult = await db.execute({
-      sql: 'SELECT id, title, s3_key, file_size, mime_type, processing_status FROM documents WHERE id = ?',
+      sql: 'SELECT id, title, s3_key, file_size, mime_type, processing_status, reader_mode, code_url, has_code FROM documents WHERE id = ?',
       args: [parseInt(documentId)],
     });
 
@@ -112,6 +168,24 @@ router.post('/process/:documentId', async (req, res) => {
 
     if (doc.processing_status === 'completed' && !force) {
       return res.status(400).json({ error: 'Document has already been processed. Use ?force=true to reprocess.' });
+    }
+
+    // Determine reader mode and code URL (request params override stored values)
+    const effectiveReaderMode = readerMode || doc.reader_mode || 'vanilla';
+    const effectiveCodeUrl = codeUrl || doc.code_url;
+    const effectiveHasCode = effectiveCodeUrl ? 1 : (doc.has_code || 0);
+
+    // Update document with reader mode if provided
+    if (readerMode || codeUrl) {
+      await db.execute({
+        sql: `UPDATE documents SET
+                reader_mode = ?,
+                code_url = ?,
+                has_code = ?,
+                updated_at = CURRENT_TIMESTAMP
+              WHERE id = ?`,
+        args: [effectiveReaderMode, effectiveCodeUrl || null, effectiveHasCode, parseInt(documentId)],
+      });
     }
 
     // Mark as processing
@@ -135,18 +209,31 @@ router.post('/process/:documentId', async (req, res) => {
           s3Key: doc.s3_key,
           fileSize: doc.file_size,
           mimeType: doc.mime_type,
+          readerMode: effectiveReaderMode,
+          codeUrl: effectiveCodeUrl,
+          hasCode: effectiveHasCode === 1,
         },
-        { provider, promptTemplateId }
+        { provider, promptTemplateId, readerMode: effectiveReaderMode }
       );
 
-      // Mark as completed
-      await queueService.markCompleted(parseInt(documentId), result.notesS3Key, result.pageCount);
+      // Mark as completed with extra data
+      const extraData = {};
+      if (result.codeNotesS3Key) {
+        extraData.codeNotesS3Key = result.codeNotesS3Key;
+      }
+      if (result.hasCode !== undefined) {
+        extraData.hasCode = result.hasCode;
+      }
+
+      await queueService.markCompleted(parseInt(documentId), result.notesS3Key, result.pageCount, extraData);
 
       res.json({
         success: true,
         documentId: parseInt(documentId),
         notesS3Key: result.notesS3Key,
+        codeNotesS3Key: result.codeNotesS3Key,
         pageCount: result.pageCount,
+        readerMode: effectiveReaderMode,
       });
     } catch (error) {
       // Mark as failed

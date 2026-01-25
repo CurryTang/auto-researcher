@@ -28,16 +28,23 @@ function parseFrontmatter(content) {
   return { metadata, content: markdownContent };
 }
 
-function NotesModal({ document, apiUrl, onClose }) {
+function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
   const [notes, setNotes] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState(initialTab); // 'paper' or 'code'
 
-  // Parse the notes content to separate frontmatter
-  const parsedNotes = useMemo(() => {
+  // Parse the paper notes content to separate frontmatter
+  const parsedPaperNotes = useMemo(() => {
     if (!notes?.notesContent) return null;
     return parseFrontmatter(notes.notesContent);
   }, [notes?.notesContent]);
+
+  // Parse the code notes content to separate frontmatter
+  const parsedCodeNotes = useMemo(() => {
+    if (!notes?.codeNotesContent) return null;
+    return parseFrontmatter(notes.codeNotesContent);
+  }, [notes?.codeNotesContent]);
 
   useEffect(() => {
     const fetchNotes = async () => {
@@ -53,6 +60,16 @@ function NotesModal({ document, apiUrl, onClose }) {
         }
 
         setNotes(data);
+        // Respect initialTab, but fallback if the requested tab has no content
+        if (initialTab === 'code' && data.hasCodeNotes) {
+          setActiveTab('code');
+        } else if (initialTab === 'paper' && data.hasNotes) {
+          setActiveTab('paper');
+        } else if (data.hasCodeNotes && !data.hasNotes) {
+          setActiveTab('code');
+        } else if (data.hasNotes) {
+          setActiveTab('paper');
+        }
       } catch (err) {
         console.error('Error fetching notes:', err);
         setError(err.message);
@@ -83,15 +100,56 @@ function NotesModal({ document, apiUrl, onClose }) {
     return () => window.removeEventListener('keydown', handleEscape);
   }, [onClose]);
 
+  const getReaderModeBadge = (mode) => {
+    if (mode === 'auto_reader') {
+      return <span className="reader-mode-badge auto-reader">Auto Reader</span>;
+    }
+    return <span className="reader-mode-badge vanilla">Vanilla</span>;
+  };
+
   return (
     <div className="modal-backdrop" onClick={handleBackdropClick}>
       <div className="notes-modal">
         <div className="notes-modal-header">
-          <h2>Notes: {document.title}</h2>
+          <div className="header-title-row">
+            <h2>Notes: {document.title}</h2>
+            {notes?.readerMode && getReaderModeBadge(notes.readerMode)}
+          </div>
           <button className="close-btn" onClick={onClose}>
             &times;
           </button>
         </div>
+
+        {/* Tabs for paper/code notes */}
+        {notes && (notes.hasNotes || notes.hasCodeNotes) && (
+          <div className="notes-tabs">
+            <button
+              className={`notes-tab ${activeTab === 'paper' ? 'active' : ''}`}
+              onClick={() => setActiveTab('paper')}
+              disabled={!notes.hasNotes}
+            >
+              Paper Notes
+            </button>
+            <button
+              className={`notes-tab ${activeTab === 'code' ? 'active' : ''}`}
+              onClick={() => setActiveTab('code')}
+              disabled={!notes.hasCodeNotes}
+            >
+              Code Notes
+              {notes.hasCodeNotes && <span className="code-badge">Available</span>}
+            </button>
+          </div>
+        )}
+
+        {/* Code URL info */}
+        {notes?.codeUrl && (
+          <div className="code-url-info">
+            <span className="code-label">Code Repository:</span>
+            <a href={notes.codeUrl} target="_blank" rel="noopener noreferrer" className="code-link">
+              {notes.codeUrl}
+            </a>
+          </div>
+        )}
 
         <div className="notes-modal-content">
           {loading && (
@@ -107,7 +165,7 @@ function NotesModal({ document, apiUrl, onClose }) {
             </div>
           )}
 
-          {notes && !notes.hasNotes && (
+          {notes && !notes.hasNotes && !notes.hasCodeNotes && (
             <div className="notes-empty">
               <p>No notes available yet.</p>
               <p className="notes-status">
@@ -128,32 +186,95 @@ function NotesModal({ document, apiUrl, onClose }) {
             </div>
           )}
 
-          {notes && notes.hasNotes && parsedNotes && (
+          {/* Paper Notes Tab */}
+          {activeTab === 'paper' && notes && notes.hasNotes && parsedPaperNotes && (
             <div className="notes-markdown">
-              {parsedNotes.metadata?.generated_at && (
+              {parsedPaperNotes.metadata?.generated_at && (
                 <div className="notes-meta">
                   <span className="meta-label">Generated:</span>
                   <span className="meta-value">
-                    {new Date(parsedNotes.metadata.generated_at).toLocaleString()}
+                    {new Date(parsedPaperNotes.metadata.generated_at).toLocaleString()}
                   </span>
+                  {parsedPaperNotes.metadata?.mode && (
+                    <>
+                      <span className="meta-label">Mode:</span>
+                      <span className="meta-value">{parsedPaperNotes.metadata.mode}</span>
+                    </>
+                  )}
                 </div>
               )}
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {parsedNotes.content}
+                {parsedPaperNotes.content}
               </ReactMarkdown>
+            </div>
+          )}
+
+          {/* Code Notes Tab */}
+          {activeTab === 'code' && notes && notes.hasCodeNotes && parsedCodeNotes && (
+            <div className="notes-markdown code-notes">
+              {parsedCodeNotes.metadata?.generated_at && (
+                <div className="notes-meta">
+                  <span className="meta-label">Generated:</span>
+                  <span className="meta-value">
+                    {new Date(parsedCodeNotes.metadata.generated_at).toLocaleString()}
+                  </span>
+                  {parsedCodeNotes.metadata?.code_url && (
+                    <>
+                      <span className="meta-label">Repository:</span>
+                      <span className="meta-value">
+                        <a href={parsedCodeNotes.metadata.code_url} target="_blank" rel="noopener noreferrer">
+                          {parsedCodeNotes.metadata.code_url}
+                        </a>
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {parsedCodeNotes.content}
+              </ReactMarkdown>
+            </div>
+          )}
+
+          {/* Empty state for selected tab */}
+          {activeTab === 'paper' && notes && !notes.hasNotes && notes.hasCodeNotes && (
+            <div className="notes-empty">
+              <p>No paper notes available.</p>
+              <p className="hint">Switch to Code Notes tab to view code analysis.</p>
+            </div>
+          )}
+
+          {activeTab === 'code' && notes && !notes.hasCodeNotes && notes.hasNotes && (
+            <div className="notes-empty">
+              <p>No code notes available.</p>
+              {notes.hasCode ? (
+                <p className="hint">Code analysis is being processed or encountered an error.</p>
+              ) : (
+                <p className="hint">This paper does not have associated code.</p>
+              )}
             </div>
           )}
         </div>
 
         <div className="notes-modal-footer">
-          {notes && notes.notesUrl && (
+          {activeTab === 'paper' && notes && notes.notesUrl && (
             <a
               href={notes.notesUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="download-notes-btn"
             >
-              Download Notes (.md)
+              Download Paper Notes (.md)
+            </a>
+          )}
+          {activeTab === 'code' && notes && notes.codeNotesUrl && (
+            <a
+              href={notes.codeNotesUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="download-notes-btn"
+            >
+              Download Code Notes (.md)
             </a>
           )}
           <button className="close-modal-btn" onClick={onClose}>

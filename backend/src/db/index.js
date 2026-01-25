@@ -61,6 +61,11 @@ async function initDatabase() {
     { name: 'processing_started_at', definition: 'DATETIME' },
     { name: 'processing_completed_at', definition: 'DATETIME' },
     { name: 'is_read', definition: 'INTEGER DEFAULT 0' },
+    // Auto-reader mode columns
+    { name: 'reader_mode', definition: "TEXT DEFAULT 'vanilla'" },
+    { name: 'code_notes_s3_key', definition: 'TEXT' },
+    { name: 'has_code', definition: 'INTEGER DEFAULT 0' },
+    { name: 'code_url', definition: 'TEXT' },
   ];
 
   for (const col of processingColumns) {

@@ -84,7 +84,9 @@ router.get('/:id/notes', async (req, res) => {
     const db = getDb();
 
     const result = await db.execute({
-      sql: 'SELECT id, title, notes_s3_key, processing_status FROM documents WHERE id = ?',
+      sql: `SELECT id, title, notes_s3_key, code_notes_s3_key, processing_status,
+                   reader_mode, has_code, code_url
+            FROM documents WHERE id = ?`,
       args: [req.params.id],
     });
 
@@ -100,7 +102,11 @@ router.get('/:id/notes', async (req, res) => {
         documentId: doc.id,
         title: doc.title,
         processingStatus: doc.processing_status,
+        readerMode: doc.reader_mode || 'vanilla',
         hasNotes: false,
+        hasCodeNotes: false,
+        hasCode: doc.has_code === 1,
+        codeUrl: doc.code_url,
         notesUrl: null,
         notesContent: null,
       });
@@ -120,14 +126,36 @@ router.get('/:id/notes', async (req, res) => {
       }
     }
 
+    // Get code notes URL if available
+    let codeNotesUrl = null;
+    let codeNotesContent = null;
+    if (doc.code_notes_s3_key) {
+      codeNotesUrl = await s3Service.generatePresignedDownloadUrl(doc.code_notes_s3_key);
+      if (req.query.inline === 'true') {
+        try {
+          const buffer = await s3Service.downloadBuffer(doc.code_notes_s3_key);
+          codeNotesContent = buffer.toString('utf-8');
+        } catch (error) {
+          console.error('Error fetching code notes content:', error);
+        }
+      }
+    }
+
     res.json({
       documentId: doc.id,
       title: doc.title,
       processingStatus: doc.processing_status,
+      readerMode: doc.reader_mode || 'vanilla',
       hasNotes: true,
+      hasCodeNotes: !!doc.code_notes_s3_key,
+      hasCode: doc.has_code === 1,
+      codeUrl: doc.code_url,
       notesUrl,
       notesS3Key: doc.notes_s3_key,
       notesContent,
+      codeNotesUrl,
+      codeNotesS3Key: doc.code_notes_s3_key,
+      codeNotesContent,
     });
   } catch (error) {
     console.error('Error getting notes:', error);

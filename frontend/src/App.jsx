@@ -15,6 +15,7 @@ function App() {
   const [offset, setOffset] = useState(0);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
+  const [initialNotesTab, setInitialNotesTab] = useState('paper');
   const [apiUrl, setApiUrl] = useState(() => {
     return localStorage.getItem('apiUrl') || DEFAULT_API_URL;
   });
@@ -242,7 +243,10 @@ function App() {
         <DocumentList
           documents={filteredDocuments}
           onDownload={getDownloadUrl}
-          onViewNotes={(doc) => setSelectedDocument(doc)}
+          onViewNotes={(doc, tab = 'paper') => {
+            setSelectedDocument(doc);
+            setInitialNotesTab(tab);
+          }}
           onToggleRead={toggleReadStatus}
           loading={loading && documents.length === 0}
         />
@@ -288,6 +292,7 @@ function App() {
         <NotesModal
           document={selectedDocument}
           apiUrl={apiUrl}
+          initialTab={initialNotesTab}
           onClose={() => setSelectedDocument(null)}
         />
       )}

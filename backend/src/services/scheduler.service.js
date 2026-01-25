@@ -135,8 +135,16 @@ class SchedulerService {
         // Process the document
         const result = await this.readerService.processDocument(item);
 
-        // Mark as completed
-        await queueService.markCompleted(item.documentId, result.notesS3Key, result.pageCount);
+        // Mark as completed with extra data for auto_reader mode
+        const extraData = {};
+        if (result.codeNotesS3Key) {
+          extraData.codeNotesS3Key = result.codeNotesS3Key;
+        }
+        if (result.hasCode !== undefined) {
+          extraData.hasCode = result.hasCode;
+        }
+
+        await queueService.markCompleted(item.documentId, result.notesS3Key, result.pageCount, extraData);
 
         console.log(`[Scheduler] Successfully processed document: ${item.title}`);
         return { processed: true, documentId: item.documentId };

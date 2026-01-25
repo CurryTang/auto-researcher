@@ -29,6 +29,11 @@ function rowToDocument(row) {
     processingCompletedAt: row.processing_completed_at,
     // Read status
     isRead: row.is_read === 1,
+    // Auto-reader mode fields
+    readerMode: row.reader_mode || 'vanilla',
+    codeNotesS3Key: row.code_notes_s3_key,
+    hasCode: row.has_code === 1,
+    codeUrl: row.code_url,
   };
 }
 
@@ -145,14 +150,28 @@ async function getDocumentById(id) {
  */
 async function updateDocument(id, data) {
   const db = getDb();
-  const allowedUpdates = ['title', 'type', 'tags', 'notes'];
+  const allowedUpdates = ['title', 'type', 'tags', 'notes', 'reader_mode', 'code_url', 'has_code'];
   const updates = [];
   const args = [];
 
-  for (const key of allowedUpdates) {
-    if (data[key] !== undefined) {
-      updates.push(`${key} = ?`);
-      args.push(key === 'tags' ? JSON.stringify(data[key]) : data[key]);
+  // Map camelCase to snake_case for DB columns
+  const fieldMapping = {
+    readerMode: 'reader_mode',
+    codeUrl: 'code_url',
+    hasCode: 'has_code',
+  };
+
+  for (const key of Object.keys(data)) {
+    const dbKey = fieldMapping[key] || key;
+    if (allowedUpdates.includes(dbKey) && data[key] !== undefined) {
+      updates.push(`${dbKey} = ?`);
+      if (dbKey === 'tags') {
+        args.push(JSON.stringify(data[key]));
+      } else if (dbKey === 'has_code') {
+        args.push(data[key] ? 1 : 0);
+      } else {
+        args.push(data[key]);
+      }
     }
   }
 

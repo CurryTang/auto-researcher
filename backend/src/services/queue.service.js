@@ -65,7 +65,8 @@ class QueueService {
     // Get the highest priority, oldest document from queue
     const result = await db.execute(`
       SELECT pq.id, pq.document_id, pq.retry_count, pq.max_retries,
-             d.title, d.s3_key, d.file_size, d.mime_type
+             d.title, d.s3_key, d.file_size, d.mime_type,
+             d.reader_mode, d.code_url, d.has_code
       FROM processing_queue pq
       JOIN documents d ON pq.document_id = d.id
       WHERE d.processing_status = 'queued'
@@ -101,24 +102,43 @@ class QueueService {
       mimeType: item.mime_type,
       retryCount: item.retry_count,
       maxRetries: item.max_retries,
+      readerMode: item.reader_mode || 'vanilla',
+      codeUrl: item.code_url,
+      hasCode: item.has_code === 1,
     };
   }
 
   // Mark a document as completed
-  async markCompleted(documentId, notesS3Key, pageCount = null) {
+  async markCompleted(documentId, notesS3Key, pageCount = null, extraData = {}) {
     const db = getDb();
+
+    // Build dynamic update for extra fields
+    let extraSets = '';
+    const args = [notesS3Key, pageCount];
+
+    if (extraData.codeNotesS3Key) {
+      extraSets += ', code_notes_s3_key = ?';
+      args.push(extraData.codeNotesS3Key);
+    }
+
+    if (extraData.hasCode !== undefined) {
+      extraSets += ', has_code = ?';
+      args.push(extraData.hasCode ? 1 : 0);
+    }
+
+    args.push(documentId);
 
     // Update document
     await db.execute({
       sql: `UPDATE documents SET
               processing_status = 'completed',
               notes_s3_key = ?,
-              page_count = ?,
+              page_count = ?${extraSets},
               processing_completed_at = CURRENT_TIMESTAMP,
               processing_error = NULL,
               updated_at = CURRENT_TIMESTAMP
             WHERE id = ?`,
-      args: [notesS3Key, pageCount, documentId],
+      args,
     });
 
     // Remove from queue

@@ -344,6 +344,43 @@ body {
   font-weight: 500;
 }
 
+/* Reader mode badge */
+.reader-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.reader-badge.auto-reader {
+  background: #8b5cf6;
+  color: white;
+}
+
+/* Code indicator */
+.code-indicator {
+  font-size: 11px;
+  padding: 2px 6px;
+  background: #059669;
+  color: white;
+  border-radius: 4px;
+  font-family: monospace;
+  font-weight: 600;
+}
+
+/* Document code URL */
+.document-code-url {
+  display: inline-block;
+  font-size: 12px;
+  color: #059669;
+  text-decoration: none;
+  margin-top: 4px;
+}
+
+.document-code-url:hover {
+  text-decoration: underline;
+}
+
 .document-actions {
   display: flex;
   flex-direction: column;
@@ -618,6 +655,37 @@ body {
   border-color: #d1d5db;
 }
 
+/* Paper notes button */
+.notes-btn.paper-notes-btn {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+}
+
+.notes-btn.paper-notes-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+/* Code notes button */
+.notes-btn.code-notes-btn {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: #166534;
+}
+
+.notes-btn.code-notes-btn:hover {
+  background: #dcfce7;
+  border-color: #4ade80;
+}
+
+/* Status button (when processing) */
+.notes-btn.status-btn {
+  background: #fefce8;
+  border-color: #fde047;
+  color: #a16207;
+}
+
 /* Read button */
 .read-btn {
   background: #f3f4f6;
@@ -709,6 +777,110 @@ body {
   white-space: nowrap;
   flex: 1;
   margin-right: 16px;
+}
+
+.header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.reader-mode-badge {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.reader-mode-badge.vanilla {
+  background: #e5e7eb;
+  color: #4b5563;
+}
+
+.reader-mode-badge.auto-reader {
+  background: #8b5cf6;
+  color: white;
+}
+
+/* Notes Tabs */
+.notes-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  background: #f9fafb;
+}
+
+.notes-tab {
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notes-tab:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.notes-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: white;
+}
+
+.notes-tab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.code-badge {
+  font-size: 10px;
+  background: var(--success);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+/* Code URL Info */
+.code-url-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: #f0fdf4;
+  border-bottom: 1px solid #86efac;
+  font-size: 13px;
+}
+
+.code-label {
+  color: #166534;
+  font-weight: 500;
+}
+
+.code-link {
+  color: #15803d;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.code-link:hover {
+  text-decoration: underline;
+}
+
+.notes-markdown.code-notes {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
 }
 
 .notes-modal-content {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-function DocumentCard({ document, onDownload, onViewNotes, onToggleRead }) {
+function DocumentCard({ document, onDownload, onViewNotes, onViewCodeNotes, onToggleRead }) {
   const [downloading, setDownloading] = useState(false);
   const [togglingRead, setTogglingRead] = useState(false);
   const [error, setError] = useState(null);
@@ -77,6 +77,15 @@ function DocumentCard({ document, onDownload, onViewNotes, onToggleRead }) {
 
   const processingStatus = document.processingStatus || 'pending';
   const hasNotes = processingStatus === 'completed';
+  const readerMode = document.readerMode || 'vanilla';
+
+  // Get reader mode badge
+  const getReaderModeBadge = () => {
+    if (readerMode === 'auto_reader') {
+      return <span className="reader-badge auto-reader" title="Multi-pass deep reading">Auto</span>;
+    }
+    return null; // Don't show badge for vanilla mode
+  };
 
   return (
     <div className={`document-card ${document.isRead ? 'is-read' : ''}`}>
@@ -86,6 +95,12 @@ function DocumentCard({ document, onDownload, onViewNotes, onToggleRead }) {
             {document.type}
           </span>
           {getStatusBadge(processingStatus)}
+          {getReaderModeBadge()}
+          {document.hasCode && (
+            <span className="code-indicator" title="Has code repository">
+              {'</>'}
+            </span>
+          )}
           <span className="document-date">{formatDate(document.createdAt)}</span>
         </div>
         <h3 className="document-title">{document.title}</h3>
@@ -97,6 +112,16 @@ function DocumentCard({ document, onDownload, onViewNotes, onToggleRead }) {
             className="document-url"
           >
             {new URL(document.originalUrl).hostname}
+          </a>
+        )}
+        {document.codeUrl && (
+          <a
+            href={document.codeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="document-code-url"
+          >
+            Code: {new URL(document.codeUrl).pathname.split('/').slice(1, 3).join('/')}
           </a>
         )}
         {document.tags && document.tags.length > 0 && (
@@ -118,13 +143,34 @@ function DocumentCard({ document, onDownload, onViewNotes, onToggleRead }) {
         >
           {togglingRead ? '...' : document.isRead ? '✓' : '○'}
         </button>
-        <button
-          className="notes-btn"
-          onClick={() => onViewNotes(document)}
-          title={hasNotes ? 'View AI-generated notes' : 'View processing status'}
-        >
-          {hasNotes ? '📝 Notes' : '📝'}
-        </button>
+        {/* Paper Notes Button - show if completed or processing */}
+        {hasNotes ? (
+          <button
+            className="notes-btn paper-notes-btn"
+            onClick={() => onViewNotes(document, 'paper')}
+            title="View paper notes"
+          >
+            📄 Paper
+          </button>
+        ) : (
+          <button
+            className="notes-btn status-btn"
+            onClick={() => onViewNotes(document, 'paper')}
+            title="View processing status"
+          >
+            📝 {processingStatus === 'processing' ? '...' : 'Status'}
+          </button>
+        )}
+        {/* Code Notes Button - only show if has code and completed */}
+        {document.hasCode && hasNotes && (
+          <button
+            className="notes-btn code-notes-btn"
+            onClick={() => onViewNotes(document, 'code')}
+            title="View code notes"
+          >
+            💻 Code
+          </button>
+        )}
         <button
           className="download-btn"
           onClick={handleDownload}

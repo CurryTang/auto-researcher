@@ -5,6 +5,7 @@ const geminiCliService = require('./gemini-cli.service');
 const mathpixService = require('./mathpix.service');
 const llmService = require('./llm.service');
 const s3Service = require('./s3.service');
+const autoReaderService = require('./auto-reader.service');
 
 /**
  * Default prompt template for paper summary
@@ -34,16 +35,38 @@ Why this paper might be important for researchers.`;
 class ReaderService {
   /**
    * Process a document through the AI reader pipeline
+   * Routes to appropriate service based on reader_mode
+   * @param {object} item - Queue item with document info
+   * @param {object} options - Processing options
+   * @returns {Promise<{notesS3Key: string, pageCount: number, codeNotesS3Key?: string}>}
+   */
+  async processDocument(item, options = {}) {
+    const { documentId, s3Key, title, readerMode, codeUrl, hasCode } = item;
+
+    // Route to appropriate reader based on mode
+    const mode = readerMode || options.readerMode || 'vanilla';
+
+    if (mode === 'auto_reader') {
+      console.log(`[Reader] Using auto_reader mode for: ${title}`);
+      return await autoReaderService.processDocument(item, options);
+    }
+
+    // Default: vanilla mode
+    return await this.processVanilla(item, options);
+  }
+
+  /**
+   * Process document in vanilla mode (simple summary)
    * @param {object} item - Queue item with document info
    * @param {object} options - Processing options
    * @returns {Promise<{notesS3Key: string, pageCount: number}>}
    */
-  async processDocument(item, options = {}) {
+  async processVanilla(item, options = {}) {
     const { documentId, s3Key, title } = item;
     let tempFilePath = null;
 
     try {
-      console.log(`[Reader] Starting to process document: ${title} (ID: ${documentId})`);
+      console.log(`[Reader] Starting vanilla processing for: ${title} (ID: ${documentId})`);
 
       // Step 1: Prepare PDF (download, truncate if needed)
       const pdfInfo = await pdfService.preparePdfForProcessing(s3Key);
