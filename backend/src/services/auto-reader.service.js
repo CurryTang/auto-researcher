@@ -301,25 +301,31 @@ class AutoReaderService {
       // Step 7: Generate final paper_notes.md with embedded figures
       const finalNotes = await this.generateFinalPaperNotes(notesFilePath, figures, title, documentId);
 
-      // Step 8: If has code, analyze it
-      let codeNotes = null;
-      if (hasCode && codeUrl) {
-        console.log(`[AutoReader] === 分析代码仓库: ${codeUrl} ===`);
-        codeNotes = await this.analyzeCodeRepository(codeUrl, documentId, title);
-      }
-
-      // Step 9: Upload notes to S3
+      // Step 8: Upload paper notes to S3 FIRST (before code analysis which can fail)
       const paperNotesS3Key = await this.uploadNotesToS3(finalNotes, documentId, title, 'paper_notes');
+      console.log(`[AutoReader] Paper notes uploaded to S3: ${paperNotesS3Key}`);
 
-      let codeNotesS3Key = null;
-      if (codeNotes) {
-        codeNotesS3Key = await this.uploadNotesToS3(codeNotes, documentId, title, 'code_notes');
-      }
-
-      // Upload figures to S3
+      // Upload paper figures to S3
       for (const figure of figures) {
         if (figure.pngPath) {
           await this.uploadFigureToS3(figure.pngPath, documentId, figure.name);
+        }
+      }
+
+      // Step 9: If has code, analyze it (non-fatal - paper notes already saved)
+      let codeNotes = null;
+      let codeNotesS3Key = null;
+      if (hasCode && codeUrl) {
+        console.log(`[AutoReader] === 分析代码仓库: ${codeUrl} ===`);
+        try {
+          codeNotes = await this.analyzeCodeRepository(codeUrl, documentId, title);
+          if (codeNotes) {
+            codeNotesS3Key = await this.uploadNotesToS3(codeNotes, documentId, title, 'code_notes');
+            console.log(`[AutoReader] Code notes uploaded to S3: ${codeNotesS3Key}`);
+          }
+        } catch (codeError) {
+          console.error(`[AutoReader] Code analysis failed (non-fatal): ${codeError.message}`);
+          // Continue without code notes - paper notes are already saved
         }
       }
 
