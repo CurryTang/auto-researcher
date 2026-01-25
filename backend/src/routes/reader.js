@@ -162,11 +162,11 @@ router.post('/process/:documentId', async (req, res) => {
 
     const doc = docResult.rows[0];
 
-    if (doc.processing_status === 'processing') {
+    if (doc.processing_status === 'processing' && !force) {
       return res.status(400).json({ error: 'Document is already being processed' });
     }
 
-    if (doc.processing_status === 'completed' && !force) {
+    if ((doc.processing_status === 'completed' || doc.processing_status === 'processing') && !force) {
       return res.status(400).json({ error: 'Document has already been processed. Use ?force=true to reprocess.' });
     }
 
