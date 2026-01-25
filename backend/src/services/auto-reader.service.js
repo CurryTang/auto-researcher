@@ -175,35 +175,59 @@ $$
 
 // ============== PROMPTS FOR CODE ANALYSIS ==============
 
-const CODE_ROUND_1_PROMPT = `快速分析代码仓库。只读README.md，不需要读其他文件。
+const CODE_ROUND_1_PROMPT = `你是代码阅读助手。分析这个仓库的基本结构。
 
-直接输出：
-- 语言/框架
-- 入口文件
-- 训练命令
-- 主要依赖
+任务：
+1. 读README.md了解项目
+2. 找出入口文件和核心目录
 
-限50字内。`;
+输出格式：
+### 基本信息
+- 语言/框架:
+- 入口文件:
+- 核心目录:
 
-const CODE_ROUND_2_PROMPT = `基于上轮分析，找出数据处理文件（data loader）。
+### 运行命令
+- 安装:
+- 训练:
 
-只需告诉我：
-- 数据集类名
-- 输入输出Tensor形状
+### 主要依赖
+- (列出3-5个关键依赖)`;
 
-限30字。
+const CODE_ROUND_2_PROMPT = `基于上轮分析，找出数据处理逻辑。
 
-{previous_notes}`;
+{previous_notes}
 
-const CODE_ROUND_3_PROMPT = `基于上轮分析，找出核心模型类。
+任务：找出数据加载和预处理代码
 
-只需：
-- 模型类名
-- forward函数做什么
+输出格式：
+### 数据处理
+- 数据集类: (类名和文件路径)
+- 数据格式: (输入数据的格式)
 
-限30字。
+### 模型接口
+- 输入: (Tensor形状)
+- 输出: (Tensor形状)
 
-{previous_notes}`;
+### 关键配置
+- (列出重要的超参数)`;
+
+const CODE_ROUND_3_PROMPT = `基于上轮分析，深入核心模型实现。
+
+{previous_notes}
+
+任务：找出核心模型类的实现细节
+
+输出格式：
+### 核心模型
+- 类名: (文件路径)
+- forward方法: (简述做什么)
+
+### 关键实现
+- (描述1-2个关键技术点)
+
+### 复现注意
+- (列出复现时需要注意的点)`;
 
 class AutoReaderService {
   constructor() {
