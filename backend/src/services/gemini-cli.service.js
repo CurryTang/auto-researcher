@@ -36,16 +36,17 @@ async function isAvailable() {
 async function readDocument(filePath, prompt, options = {}) {
   const geminiPath = config.geminiCli?.path || 'gemini';
   const timeoutMs = options.timeout || DEFAULT_TIMEOUT_MS;
+  const model = config.geminiCli?.model || 'gemini-2.5-flash';
 
   return new Promise((resolve, reject) => {
     // Build the full prompt with file reference using @ syntax
     // Gemini CLI uses @filepath to attach files to the prompt
     const fullPrompt = `${prompt}\n\n@${filePath}`;
 
-    // Use positional prompt (the new preferred way, -p is deprecated)
-    const args = [fullPrompt];
+    // Use positional prompt with model flag
+    const args = ['-m', model, fullPrompt];
 
-    console.log(`[Gemini CLI] Running: ${geminiPath} with prompt referencing: ${filePath}`);
+    console.log(`[Gemini CLI] Running: ${geminiPath} -m ${model} with prompt referencing: ${filePath}`);
 
     const proc = spawn(geminiPath, args, {
       timeout: timeoutMs,
@@ -133,13 +134,14 @@ async function readWithPrompts(filePath, systemPrompt, userPrompt, options = {})
 async function readMarkdown(markdownContent, prompt, options = {}) {
   const geminiPath = config.geminiCli?.path || 'gemini';
   const timeoutMs = options.timeout || DEFAULT_TIMEOUT_MS;
+  const model = config.geminiCli?.model || 'gemini-2.5-flash';
 
   return new Promise((resolve, reject) => {
     const fullPrompt = `${prompt}\n\n---\n\nDocument content:\n\n${markdownContent}`;
 
-    const args = ['-p', fullPrompt];
+    const args = ['-m', model, fullPrompt];
 
-    console.log(`[Gemini CLI] Running with markdown content (${markdownContent.length} chars)`);
+    console.log(`[Gemini CLI] Running with markdown content (${markdownContent.length} chars), model: ${model}`);
 
     const proc = spawn(geminiPath, args, {
       timeout: timeoutMs,
