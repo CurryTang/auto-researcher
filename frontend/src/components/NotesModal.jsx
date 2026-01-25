@@ -103,6 +103,7 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState(initialTab); // 'paper' or 'code'
+  const [isMaximized, setIsMaximized] = useState(false);
 
   // Parse the paper notes content to separate frontmatter
   const parsedPaperNotes = useMemo(() => {
@@ -208,15 +209,24 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
 
   return (
     <div className="modal-backdrop" onClick={handleBackdropClick}>
-      <div className="notes-modal">
+      <div className={`notes-modal ${isMaximized ? 'maximized' : ''}`}>
         <div className="notes-modal-header">
           <div className="header-title-row">
             <h2>Notes: {document.title}</h2>
             {notes?.readerMode && getReaderModeBadge(notes.readerMode)}
           </div>
-          <button className="close-btn" onClick={onClose}>
-            &times;
-          </button>
+          <div className="header-actions">
+            <button
+              className="maximize-btn"
+              onClick={() => setIsMaximized(!isMaximized)}
+              title={isMaximized ? 'Restore' : 'Maximize'}
+            >
+              {isMaximized ? '⊖' : '⊕'}
+            </button>
+            <button className="close-btn" onClick={onClose}>
+              &times;
+            </button>
+          </div>
         </div>
 
         {/* Tabs for paper/code notes */}
