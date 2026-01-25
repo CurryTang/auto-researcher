@@ -139,7 +139,7 @@ async function readSourceFiles(repoDir, files, totalLimit = 100000) {
 async function analyzeRepository(repoDir, prompt, options = {}) {
   const claudePath = config.claudeCli?.path || 'claude';
   const timeoutMs = options.timeout || DEFAULT_TIMEOUT_MS;
-  const model = config.claudeCli?.model || 'claude-haiku-4-5';
+  const model = config.claudeCli?.model || 'claude-sonnet-4-5-20250514';
 
   // Read key files and source files to include in prompt
   console.log(`[Claude Code] Reading repository files from: ${repoDir}`);
