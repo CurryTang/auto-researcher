@@ -21,6 +21,30 @@ module.exports = {
     origin: process.env.CORS_ORIGIN || '*',
   },
 
+  // Rate Limiting Configuration
+  rateLimit: {
+    // General API rate limit
+    general: {
+      windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+      max: parseInt(process.env.RATE_LIMIT_MAX) || 200, // requests per window
+    },
+    // Paper/document processing rate limit
+    paperAnalysis: {
+      windowMs: parseInt(process.env.PAPER_ANALYSIS_WINDOW_MS) || 60 * 60 * 1000, // 1 hour
+      max: parseInt(process.env.PAPER_ANALYSIS_MAX) || 30, // 30 per hour
+    },
+    // Code analysis rate limit
+    codeAnalysis: {
+      windowMs: parseInt(process.env.CODE_ANALYSIS_WINDOW_MS) || 60 * 60 * 1000, // 1 hour
+      max: parseInt(process.env.CODE_ANALYSIS_MAX) || 20, // 20 per hour
+    },
+    // File upload rate limit
+    upload: {
+      windowMs: parseInt(process.env.UPLOAD_WINDOW_MS) || 60 * 60 * 1000, // 1 hour
+      max: parseInt(process.env.UPLOAD_MAX) || 50, // 50 per hour
+    },
+  },
+
   // Document Reader Configuration
   reader: {
     enabled: process.env.READER_ENABLED !== 'false', // Enabled by default

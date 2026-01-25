@@ -6,12 +6,90 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import mermaid from 'mermaid';
 
-// Initialize mermaid
+// Initialize mermaid with better unicode support
 mermaid.initialize({
   startOnLoad: false,
   theme: 'default',
   securityLevel: 'loose',
+  flowchart: {
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
 });
+
+// Pre-process mermaid code to fix common issues
+function preprocessMermaidCode(code) {
+  if (!code) return code;
+
+  // Quote subgraph names - but skip if already has ["label"] syntax
+  // Match: subgraph name (without brackets or quotes)
+  code = code.replace(/^(\s*subgraph\s+)(\w+)(\s*$)/gm, (match, prefix, name, suffix) => {
+    // Simple identifier without spaces - leave as is
+    return match;
+  });
+
+  // For subgraph with spaces but no bracket label: subgraph My Name -> subgraph "My Name"
+  // But NOT: subgraph name["label"] - that's already valid
+  code = code.replace(/^(\s*subgraph\s+)([^"'\[\n]+?)(\s*)$/gm, (match, prefix, name, suffix) => {
+    const trimmedName = name.trim();
+    // Skip if it's a simple identifier (no spaces/special chars)
+    if (/^\w+$/.test(trimmedName)) {
+      return match;
+    }
+    // Skip if already quoted
+    if ((trimmedName.startsWith('"') && trimmedName.endsWith('"')) ||
+        (trimmedName.startsWith("'") && trimmedName.endsWith("'"))) {
+      return match;
+    }
+    // Quote it
+    return `${prefix}"${trimmedName}"${suffix}`;
+  });
+
+  // Fix node labels in square brackets: A[Label With Space] -> A["Label With Space"]
+  // But skip if already quoted: A["label"]
+  code = code.replace(/(\w+)\[([^\]"]+)\]/g, (match, nodeId, label) => {
+    // If label contains spaces or non-ASCII, quote it
+    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
+      return `${nodeId}["${label}"]`;
+    }
+    return match;
+  });
+
+  // Fix node labels in double parentheses (circles): A((Label)) -> A(("Label"))
+  code = code.replace(/(\w+)\(\(([^)"]+)\)\)/g, (match, nodeId, label) => {
+    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
+      return `${nodeId}(("${label}"))`;
+    }
+    return match;
+  });
+
+  // Fix node labels in single parentheses: A(Label With Space) -> A("Label With Space")
+  code = code.replace(/(\w+)\(([^()"]+)\)(?!\))/g, (match, nodeId, label) => {
+    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
+      return `${nodeId}("${label}")`;
+    }
+    return match;
+  });
+
+  // Fix edge labels: |Label| patterns - quote if has spaces/non-ASCII
+  // But skip if already quoted: |"label"|
+  code = code.replace(/\|([^|"]+)\|/g, (match, label) => {
+    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
+      return `|"${label}"|`;
+    }
+    return match;
+  });
+
+  // Fix edge labels with dashes: --Label--> patterns (not already quoted)
+  code = code.replace(/--([^"\s|>][^>]*?)-->/g, (match, label) => {
+    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
+      return `--"${label.trim()}"-->`;
+    }
+    return match;
+  });
+
+  return code;
+}
 
 // Mermaid diagram component
 function MermaidDiagram({ code }) {
@@ -24,11 +102,13 @@ function MermaidDiagram({ code }) {
       if (!code) return;
       try {
         const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
-        const { svg } = await mermaid.render(id, code);
+        const processedCode = preprocessMermaidCode(code);
+        const { svg } = await mermaid.render(id, processedCode);
         setSvg(svg);
         setError(null);
       } catch (err) {
         console.error('Mermaid render error:', err);
+        console.error('Original code:', code);
         setError(err.message);
       }
     };

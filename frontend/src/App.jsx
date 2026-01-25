@@ -19,6 +19,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [allTags, setAllTags] = useState([]);
   const [selectedTag, setSelectedTag] = useState(null);
+  const [readFilter, setReadFilter] = useState('all'); // 'all', 'unread', 'read'
   const [showFilters, setShowFilters] = useState(false);
 
   const LIMIT = 5;
@@ -82,18 +83,29 @@ function App() {
     }
   };
 
-  // Filter documents by search query and tag
-  const filteredDocuments = documents.filter((doc) => {
-    // Filter by search query
-    const matchesSearch = !searchQuery ||
-      doc.title.toLowerCase().includes(searchQuery.toLowerCase());
+  // Filter and sort documents
+  const filteredDocuments = documents
+    .filter((doc) => {
+      // Filter by search query
+      const matchesSearch = !searchQuery ||
+        doc.title.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // Filter by tag
-    const matchesTag = !selectedTag ||
-      (doc.tags && doc.tags.includes(selectedTag));
+      // Filter by tag
+      const matchesTag = !selectedTag ||
+        (doc.tags && doc.tags.includes(selectedTag));
 
-    return matchesSearch && matchesTag;
-  });
+      // Filter by read status
+      const matchesReadFilter = readFilter === 'all' ||
+        (readFilter === 'unread' && !doc.isRead) ||
+        (readFilter === 'read' && doc.isRead);
+
+      return matchesSearch && matchesTag && matchesReadFilter;
+    })
+    // Sort: unread first, then by date
+    .sort((a, b) => {
+      if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
 
   // Get download URL for a document
   const getDownloadUrl = async (document) => {
@@ -167,7 +179,27 @@ function App() {
           <h1>Auto Reader</h1>
           <p className="subtitle">Your Research Library</p>
         </div>
-        <div className="header-actions">
+        <div className="header-nav">
+          <div className="nav-tabs">
+            <button
+              className={`nav-tab ${readFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setReadFilter('all')}
+            >
+              All
+            </button>
+            <button
+              className={`nav-tab ${readFilter === 'unread' ? 'active' : ''}`}
+              onClick={() => setReadFilter('unread')}
+            >
+              Unread
+            </button>
+            <button
+              className={`nav-tab ${readFilter === 'read' ? 'active' : ''}`}
+              onClick={() => setReadFilter('read')}
+            >
+              Read
+            </button>
+          </div>
           <button
             className={`filter-btn ${showFilters ? 'active' : ''}`}
             onClick={() => setShowFilters(!showFilters)}
@@ -198,7 +230,7 @@ function App() {
             )}
           </div>
           <div className="tag-filter">
-            <span className="filter-label">Filter by tag:</span>
+            <span className="filter-label">Tag:</span>
             <div className="tag-chips">
               <button
                 className={`tag-chip ${!selectedTag ? 'active' : ''}`}
@@ -218,7 +250,7 @@ function App() {
               ))}
             </div>
           </div>
-          {(searchQuery || selectedTag) && (
+          {(searchQuery || selectedTag || readFilter !== 'all') && (
             <div className="active-filters">
               <span className="filter-count">
                 Showing {filteredDocuments.length} of {documents.length} documents
@@ -228,6 +260,7 @@ function App() {
                 onClick={() => {
                   setSearchQuery('');
                   setSelectedTag(null);
+                  setReadFilter('all');
                 }}
               >
                 Clear filters

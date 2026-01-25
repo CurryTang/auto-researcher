@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const routes = require('./routes');
 const { initDatabase } = require('./db');
@@ -16,6 +17,45 @@ const app = express();
 // Security middleware
 app.use(helmet());
 
+// Rate limiting - prevent abuse (configurable via config/index.js)
+const generalLimiter = rateLimit({
+  windowMs: config.rateLimit.general.windowMs,
+  max: config.rateLimit.general.max,
+  message: { error: 'Too many requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Paper/document analysis rate limit
+const paperAnalysisLimiter = rateLimit({
+  windowMs: config.rateLimit.paperAnalysis.windowMs,
+  max: config.rateLimit.paperAnalysis.max,
+  message: { error: 'Paper analysis rate limit exceeded. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Code analysis rate limit
+const codeAnalysisLimiter = rateLimit({
+  windowMs: config.rateLimit.codeAnalysis.windowMs,
+  max: config.rateLimit.codeAnalysis.max,
+  message: { error: 'Code analysis rate limit exceeded. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Upload rate limit
+const uploadLimiter = rateLimit({
+  windowMs: config.rateLimit.upload.windowMs,
+  max: config.rateLimit.upload.max,
+  message: { error: 'Upload rate limit exceeded. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Apply general rate limit to all requests
+app.use(generalLimiter);
+
 // CORS configuration
 app.use(
   cors({
@@ -28,6 +68,11 @@ app.use(
 // Body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Apply specific rate limits to expensive operations
+app.use('/api/reader/process', paperAnalysisLimiter);
+app.use('/api/code-analysis', codeAnalysisLimiter);
+app.use('/api/upload', uploadLimiter);
 
 // API routes
 app.use('/api', routes);
