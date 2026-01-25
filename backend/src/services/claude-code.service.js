@@ -50,6 +50,7 @@ async function analyzeRepository(repoDir, prompt, options = {}) {
       '-p', prompt,
       '--print',  // Non-interactive, prints result and exits
       '--model', model,  // Use specified model
+      '--allowedTools', 'Read,Glob',  // Only allow read and search tools for faster analysis
     ];
 
     // Add --allowedTools if specified (for restricting tool usage)
