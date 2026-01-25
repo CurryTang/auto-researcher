@@ -75,7 +75,7 @@ const PAPER_PASS_2_PROMPT = `你是一位专业的学术论文阅读助手。这
 - 直接输出Markdown内容，不要包含任何开场白或说明性文字
 - 不要使用<details>或<summary>标签
 - 不要说"我已完成..."之类的话
-- **重要**: 对于每个关键图表，必须用ASCII字符画出文本图来复现其内容
+- **重要**: 必须为论文中的关键图表绘制可视化图，帮助读者理解
 
 请直接输出以下Markdown格式：
 
@@ -85,57 +85,74 @@ const PAPER_PASS_2_PROMPT = `你是一位专业的学术论文阅读助手。这
 ### 方法概述
 [用自己的话描述方法，不超过一段]
 
-### 关键图表解读
+### 关键图表复现
 
-对于每个重要的图表，请按以下格式输出：
+对于论文中每个重要的图表，请按以下格式输出其可视化复现：
 
 **Figure X: [图标题]**
 
 [这个图说明了什么，1-2句话]
 
+对于流程图/架构图，使用Mermaid：
+\`\`\`mermaid
+graph LR
+    A[Input] --> B[Processing]
+    B --> C[Output]
+    B --> D[Side Effect]
 \`\`\`
-[用ASCII字符画复现图的内容，例如：]
 
-        ┌──────────┐     ┌──────────┐     ┌──────────┐
-        │  Input   │────▶│ Encoder  │────▶│  Output  │
-        └──────────┘     └──────────┘     └──────────┘
-              │                                 ▲
-              │          ┌──────────┐          │
-              └─────────▶│ Decoder  │──────────┘
-                         └──────────┘
+或使用ASCII字符画：
+\`\`\`
+┌──────────┐     ┌──────────┐     ┌──────────┐
+│  Input   │────▶│ Process  │────▶│  Output  │
+└──────────┘     └──────────┘     └──────────┘
 \`\`\`
 
 **Table Y: [表标题]**
 
 [这个表的关键发现]
 
-\`\`\`
-[用ASCII字符画复现表格，例如：]
+使用Markdown表格复现关键数据：
+| Method | Metric1 | Metric2 | Metric3 |
+|--------|---------|---------|---------|
+| Baseline | 32.1 | 45.2 | 38.5 |
+| **Ours** | **45.3** | **58.7** | **51.2** |
 
-+------------+--------+--------+--------+
-| Method     | BLEU   | ROUGE  | F1     |
-+------------+--------+--------+--------+
-| Baseline   | 32.1   | 45.2   | 38.5   |
-| Ours       | 45.3   | 58.7   | 51.2   |
-| Ours+      | 48.2   | 61.3   | 54.1   |
-+------------+--------+--------+--------+
+### 方法流程图
+
+使用Mermaid绘制论文核心方法的流程：
+
+\`\`\`mermaid
+flowchart TD
+    subgraph 输入层
+        A[原始输入]
+    end
+    subgraph 处理层
+        B[步骤1]
+        C[步骤2]
+        D[步骤3]
+    end
+    subgraph 输出层
+        E[最终输出]
+    end
+    A --> B --> C --> D --> E
 \`\`\`
 
 ### 实验设置
-- **数据集**:
-- **基线方法**:
-- **评估指标**:
+- **数据集**: [名称和规模]
+- **基线方法**: [对比方法列表]
+- **评估指标**: [指标及其含义]
 
 ### 主要结果
-[结果总结，关键数字]
+[结果总结，关键数字，最好用表格呈现]
 
 ### 存疑点
 - [ ] [不理解的点1]
 - [ ] [不理解的点2]
 
 ### 待追读文献
-- [ ] [重要参考文献1]
-- [ ] [重要参考文献2]`;
+- [ ] [重要参考文献1] - [为什么重要]
+- [ ] [重要参考文献2] - [为什么重要]`;
 
 const PAPER_PASS_3_PROMPT = `你是一位专业的学术论文阅读助手。这是第三轮阅读（深度理解）。
 
@@ -144,14 +161,14 @@ const PAPER_PASS_3_PROMPT = `你是一位专业的学术论文阅读助手。这
 {previous_notes}
 
 ## 任务
-深入方法细节，构建数学框架。
+深入方法细节，构建数学框架，绘制详细的系统图。
 
 ## 输出要求
 - 直接输出Markdown内容，不要包含任何开场白或说明性文字
 - 不要使用<details>或<summary>标签
 - 不要说"我已完成..."之类的话
 - 数学公式使用 $...$ 或 $$...$$ 格式
-- **重要**: 必须用ASCII字符画出完整的方法架构图和数据流程图
+- **重要**: 必须绘制多个详细的架构图来帮助读者理解论文
 
 请直接输出以下Markdown格式：
 
@@ -172,43 +189,67 @@ $$
 [核心公式，使用 LaTeX 格式]
 $$
 
-### 方法架构图
+公式解读：[逐项解释公式中的符号含义]
 
-用ASCII字符画出完整的系统架构：
+### 系统架构总览
 
+使用Mermaid绘制论文的整体系统架构：
+
+\`\`\`mermaid
+graph TB
+    subgraph 输入层["输入层"]
+        A[数据输入]
+    end
+    subgraph 核心模块["核心处理模块"]
+        B[模块1: 名称]
+        C[模块2: 名称]
+        D[模块3: 名称]
+    end
+    subgraph 输出层["输出层"]
+        E[最终输出]
+    end
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    B -.-> D
 \`\`\`
-[画出方法的完整架构图，展示各组件之间的关系，例如：]
 
-                         ┌─────────────────────────────────────┐
-                         │           System Overview           │
-                         └─────────────────────────────────────┘
-                                          │
-            ┌─────────────────────────────┼─────────────────────────────┐
-            │                             │                             │
-            ▼                             ▼                             ▼
-    ┌───────────────┐           ┌───────────────┐           ┌───────────────┐
-    │   Module A    │           │   Module B    │           │   Module C    │
-    │  (功能描述)   │──────────▶│  (功能描述)   │──────────▶│  (功能描述)   │
-    └───────────────┘           └───────────────┘           └───────────────┘
-            │                             │                             │
-            └─────────────────────────────┼─────────────────────────────┘
-                                          ▼
-                                  ┌───────────────┐
-                                  │    Output     │
-                                  └───────────────┘
+### 核心算法流程
+
+使用Mermaid绘制核心算法的详细步骤：
+
+\`\`\`mermaid
+flowchart TD
+    Start([开始]) --> Step1[步骤1: 描述]
+    Step1 --> Step2[步骤2: 描述]
+    Step2 --> Decision{条件判断?}
+    Decision -->|是| Step3a[分支A]
+    Decision -->|否| Step3b[分支B]
+    Step3a --> Step4[合并步骤]
+    Step3b --> Step4
+    Step4 --> End([结束])
 \`\`\`
 
-### 数据流程图
+### 数据流图
 
-\`\`\`
-[画出数据如何在系统中流动，例如：]
+展示数据在系统中的流动过程：
 
-Input Data ──▶ Preprocessing ──▶ Feature Extraction ──▶ Model ──▶ Output
-     │              │                    │                │
-     │              ▼                    ▼                ▼
-     │         [处理细节]           [特征类型]        [模型结构]
-     │
-     └──▶ Augmentation ──┘
+\`\`\`mermaid
+flowchart LR
+    subgraph 数据预处理
+        A1[原始数据] --> A2[清洗]
+        A2 --> A3[特征提取]
+    end
+    subgraph 模型处理
+        B1[编码器] --> B2[核心计算]
+        B2 --> B3[解码器]
+    end
+    subgraph 后处理
+        C1[结果整合] --> C2[输出]
+    end
+    A3 --> B1
+    B3 --> C1
 \`\`\`
 
 ### 方法深度解析
@@ -335,21 +376,23 @@ class AutoReaderService {
       // Step 5: Generate final paper notes (Mermaid diagrams render natively in markdown)
       let finalNotes = await fs.readFile(notesFilePath, 'utf-8');
 
-      // Step 8: If has code, fetch README for basic code info (non-fatal)
-      let codeReadme = null;
+      // Step 8: If has code, fetch README and summarize it (non-fatal)
       if (hasCode && codeUrl) {
-        console.log(`[AutoReader] === 获取代码README: ${codeUrl} ===`);
+        console.log(`[AutoReader] === 获取并摘要代码README: ${codeUrl} ===`);
         try {
-          codeReadme = await this.fetchGitHubReadme(codeUrl);
+          const codeReadme = await this.fetchGitHubReadme(codeUrl);
           if (codeReadme) {
-            // Add code overview section to paper notes (without blockquote formatting)
-            finalNotes += '\n\n---\n\n## 代码仓库概览\n\n';
-            finalNotes += `**仓库地址**: [${codeUrl}](${codeUrl})\n\n`;
-            finalNotes += codeReadme;
-            finalNotes += '\n\n*点击"代码分析"按钮获取详细的代码解读*\n';
+            // Summarize README using Gemini CLI
+            const readmeSummary = await this.summarizeReadme(codeReadme, codeUrl, title);
+            if (readmeSummary) {
+              finalNotes += '\n\n---\n\n## 代码仓库概览\n\n';
+              finalNotes += `**仓库地址**: [${codeUrl}](${codeUrl})\n\n`;
+              finalNotes += readmeSummary;
+              finalNotes += '\n\n*点击"代码分析"按钮获取详细的代码解读*\n';
+            }
           }
         } catch (readmeError) {
-          console.log(`[AutoReader] README fetch failed (non-fatal):`, readmeError.message);
+          console.log(`[AutoReader] README processing failed (non-fatal):`, readmeError.message);
         }
       }
 
@@ -821,6 +864,77 @@ generated_at: ${now.toISOString()}
     }
   }
 
+  /**
+   * Summarize README content using Gemini CLI
+   * @param {string} readmeContent - Raw README content
+   * @param {string} codeUrl - Repository URL
+   * @param {string} paperTitle - Paper title for context
+   * @returns {Promise<string|null>} - Summarized README
+   */
+  async summarizeReadme(readmeContent, codeUrl, paperTitle) {
+    try {
+      const prompt = `你是一位代码仓库分析专家。请根据以下README内容，为这个与论文"${paperTitle}"相关的代码仓库生成一个简洁但信息丰富的概览。
+
+## README内容：
+${readmeContent}
+
+## 输出要求：
+- 用中文输出
+- 直接输出Markdown内容，不要包含任何开场白
+- 提取最关键的信息，不要冗余
+
+请按以下格式输出：
+
+### 项目简介
+[1-2句话描述项目是什么，解决什么问题]
+
+### 核心特性
+- [特性1]
+- [特性2]
+- [特性3]
+
+### 快速开始
+\`\`\`bash
+[最简单的安装和运行命令，如果README中有的话]
+\`\`\`
+
+### 架构概览
+\`\`\`
+[用ASCII字符画出项目的核心架构，根据README内容推断]
+例如:
+Input --> Module A --> Module B --> Output
+           |              |
+           +-- SubModule --+
+\`\`\`
+
+### 与论文的关系
+[说明这个代码仓库与论文的对应关系，哪些部分实现了论文中的方法]`;
+
+      // Write prompt to temp file
+      const promptPath = path.join(this.processingDir, `readme_prompt_${Date.now()}.txt`);
+      await fs.writeFile(promptPath, prompt, 'utf-8');
+
+      try {
+        // Use Gemini CLI to summarize
+        const result = await geminiCliService.runWithPromptFile(promptPath, {
+          timeout: 60000,
+          model: 'gemini-3-flash-preview',
+        });
+        return result.text;
+      } finally {
+        // Cleanup prompt file
+        try {
+          await fs.unlink(promptPath);
+        } catch (e) { /* ignore */ }
+      }
+    } catch (error) {
+      console.log(`[AutoReader] README summarization failed: ${error.message}`);
+      // Fall back to truncated raw README
+      return readmeContent.length > 1500
+        ? readmeContent.substring(0, 1500) + '\n\n... (README 已截断)'
+        : readmeContent;
+    }
+  }
 
   /**
    * Generate final code notes with embedded figures

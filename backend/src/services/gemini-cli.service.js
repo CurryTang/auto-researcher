@@ -428,10 +428,78 @@ ${sourceFilesContent}
   });
 }
 
+/**
+ * Run Gemini CLI with a prompt file (no file attachment)
+ * @param {string} promptFilePath - Path to the prompt file
+ * @param {object} options - Additional options
+ * @returns {Promise<{text: string, raw: object}>}
+ */
+async function runWithPromptFile(promptFilePath, options = {}) {
+  const geminiPath = config.geminiCli?.path || 'gemini';
+  const timeoutMs = options.timeout || DEFAULT_TIMEOUT_MS;
+  const model = options.model || config.geminiCli?.model || 'gemini-3-flash-preview';
+
+  // Read prompt from file
+  const prompt = await fs.readFile(promptFilePath, 'utf-8');
+
+  return new Promise((resolve, reject) => {
+    const args = ['-m', model, prompt];
+
+    console.log(`[Gemini CLI] Running prompt file: ${promptFilePath} (${prompt.length} chars)`);
+
+    const proc = spawn(geminiPath, args, {
+      timeout: timeoutMs,
+      maxBuffer: 50 * 1024 * 1024,
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    proc.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        resolve({
+          text: stdout.trim(),
+          raw: null,
+        });
+      } else {
+        reject(new Error(`Gemini CLI exited with code ${code}: ${stderr || stdout}`));
+      }
+    });
+
+    proc.on('error', (error) => {
+      if (error.code === 'ETIMEDOUT') {
+        reject(new Error('Gemini CLI timeout'));
+      } else if (error.code === 'ENOENT') {
+        reject(new Error(`Gemini CLI not found at path: ${geminiPath}`));
+      } else {
+        reject(error);
+      }
+    });
+
+    const timeoutHandle = setTimeout(() => {
+      proc.kill('SIGTERM');
+      reject(new Error('Gemini CLI timeout'));
+    }, timeoutMs);
+
+    proc.on('close', () => {
+      clearTimeout(timeoutHandle);
+    });
+  });
+}
+
 module.exports = {
   isAvailable,
   readDocument,
   readWithPrompts,
   readMarkdown,
   analyzeRepository,
+  runWithPromptFile,
 };
