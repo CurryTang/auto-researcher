@@ -324,7 +324,8 @@ class AutoReaderService {
             console.log(`[AutoReader] Code notes uploaded to S3: ${codeNotesS3Key}`);
           }
         } catch (codeError) {
-          console.error(`[AutoReader] Code analysis failed (non-fatal): ${codeError.message}`);
+          console.log(`[AutoReader] Code analysis failed (non-fatal):`, codeError);
+          console.log(`[AutoReader] Error message: ${codeError?.message || codeError}`);
           // Continue without code notes - paper notes are already saved
         }
       }
@@ -629,6 +630,7 @@ language: zh-CN
       // Clone repository (skip LFS)
       console.log(`[AutoReader] Cloning repository: ${codeUrl}`);
       await this.cloneRepository(codeUrl, repoDir);
+      console.log(`[AutoReader] Repository cloned to: ${repoDir}`);
 
       const now = new Date();
       // Initialize code notes with template header
