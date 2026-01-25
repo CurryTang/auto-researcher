@@ -3,8 +3,8 @@ const config = require('../config');
 const path = require('path');
 const fs = require('fs').promises;
 
-// Default timeout for Claude Code CLI (2 minutes should be enough when content is in prompt)
-const DEFAULT_TIMEOUT_MS = 2 * 60 * 1000;
+// Default timeout for Claude Code CLI (5 minutes for large prompts with file content)
+const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
 // Maximum characters to include from each file
 const MAX_FILE_CHARS = 50000;
