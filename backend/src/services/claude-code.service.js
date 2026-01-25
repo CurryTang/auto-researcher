@@ -1,9 +1,13 @@
 const { spawn } = require('child_process');
 const config = require('../config');
 const path = require('path');
+const fs = require('fs').promises;
 
-// Default timeout for Claude Code CLI (10 minutes per round - needs time for multiple file reads)
-const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+// Default timeout for Claude Code CLI (2 minutes should be enough when content is in prompt)
+const DEFAULT_TIMEOUT_MS = 2 * 60 * 1000;
+
+// Maximum characters to include from each file
+const MAX_FILE_CHARS = 50000;
 
 /**
  * Claude Code CLI Service
@@ -33,7 +37,100 @@ async function isAvailable() {
 }
 
 /**
+ * Read key repository files for context
+ * @param {string} repoDir - Repository directory
+ * @returns {Promise<string>} - Combined file contents
+ */
+async function readKeyFiles(repoDir) {
+  const keyFiles = [
+    'README.md',
+    'README.rst',
+    'README',
+    'requirements.txt',
+    'setup.py',
+    'pyproject.toml',
+    'package.json',
+    'Cargo.toml',
+    'go.mod',
+  ];
+
+  let context = '';
+
+  for (const file of keyFiles) {
+    try {
+      const filePath = path.join(repoDir, file);
+      const content = await fs.readFile(filePath, 'utf-8');
+      const truncated = content.substring(0, MAX_FILE_CHARS);
+      context += `\n\n### File: ${file}\n\`\`\`\n${truncated}\n\`\`\``;
+      if (content.length > MAX_FILE_CHARS) {
+        context += `\n(truncated, original ${content.length} chars)`;
+      }
+    } catch (e) {
+      // File doesn't exist, skip
+    }
+  }
+
+  return context;
+}
+
+/**
+ * Find Python/JS source files in the repository
+ * @param {string} repoDir - Repository directory
+ * @returns {Promise<string[]>} - List of source file paths
+ */
+async function findSourceFiles(repoDir) {
+  return new Promise((resolve) => {
+    const proc = spawn('find', [
+      '.', '-type', 'f',
+      '(', '-name', '*.py', '-o', '-name', '*.js', '-o', '-name', '*.ts', ')',
+      '-not', '-path', '*/.*',
+      '-not', '-path', '*node_modules*',
+      '-not', '-path', '*__pycache__*',
+    ], { cwd: repoDir });
+
+    let output = '';
+    proc.stdout.on('data', (data) => { output += data.toString(); });
+    proc.on('close', () => {
+      const files = output.trim().split('\n').filter(Boolean).slice(0, 20);
+      resolve(files);
+    });
+    proc.on('error', () => { resolve([]); });
+  });
+}
+
+/**
+ * Read specific source files (up to limit)
+ * @param {string} repoDir - Repository directory
+ * @param {string[]} files - List of files to read
+ * @param {number} totalLimit - Total character limit
+ * @returns {Promise<string>} - Combined file contents
+ */
+async function readSourceFiles(repoDir, files, totalLimit = 100000) {
+  let context = '';
+  let totalChars = 0;
+
+  for (const file of files) {
+    if (totalChars >= totalLimit) break;
+
+    try {
+      const filePath = path.join(repoDir, file);
+      const content = await fs.readFile(filePath, 'utf-8');
+      const remaining = totalLimit - totalChars;
+      const truncated = content.substring(0, Math.min(content.length, remaining, 20000));
+      context += `\n\n### File: ${file}\n\`\`\`\n${truncated}\n\`\`\``;
+      totalChars += truncated.length;
+    } catch (e) {
+      // Skip files that can't be read
+    }
+  }
+
+  return context;
+}
+
+/**
  * Analyze a code repository using Claude Code CLI
+ * Uses workaround: reads files manually and passes content in prompt with tools disabled
+ * (Due to Claude Code CLI bug with duplicate tool_use IDs)
  * @param {string} repoDir - Path to the cloned repository
  * @param {string} prompt - The analysis prompt
  * @param {object} options - Additional options
@@ -44,29 +141,42 @@ async function analyzeRepository(repoDir, prompt, options = {}) {
   const timeoutMs = options.timeout || DEFAULT_TIMEOUT_MS;
   const model = config.claudeCli?.model || 'claude-haiku-4-5';
 
+  // Read key files and source files to include in prompt
+  console.log(`[Claude Code] Reading repository files from: ${repoDir}`);
+  const keyFilesContent = await readKeyFiles(repoDir);
+  const sourceFiles = await findSourceFiles(repoDir);
+  const sourceFilesContent = await readSourceFiles(repoDir, sourceFiles);
+
+  // Build full prompt with file contents
+  const fullPrompt = `${prompt}
+
+## 仓库文件内容
+
+以下是仓库中的关键文件内容，请基于这些内容进行分析：
+${keyFilesContent}
+
+## 源代码文件
+${sourceFilesContent}`;
+
+  console.log(`[Claude Code] Prompt size: ${fullPrompt.length} chars`);
+
   return new Promise((resolve, reject) => {
-    // Claude Code CLI uses -p for prompt and --print for non-interactive output
+    // Claude Code CLI with tools disabled to avoid tool_use ID bug
     const args = [
-      '-p', prompt,
-      '--print',  // Non-interactive, prints result and exits
-      '--model', model,  // Use specified model
+      '-p', fullPrompt,
+      '--print',
+      '--model', model,
+      '--tools', '',  // Disable tools to avoid duplicate tool_use ID bug
     ];
 
-    // Add --allowedTools if specified (for restricting tool usage)
-    if (options.allowedTools) {
-      args.push('--allowedTools', options.allowedTools.join(','));
-    }
-
     console.log(`[Claude Code] Running in: ${repoDir} with model: ${model}`);
-    console.log(`[Claude Code] Prompt: ${prompt.substring(0, 100)}...`);
 
     const proc = spawn(claudePath, args, {
-      cwd: repoDir,  // Run in the repository directory
+      cwd: repoDir,
       timeout: timeoutMs,
-      maxBuffer: 50 * 1024 * 1024, // 50MB buffer for large outputs
+      maxBuffer: 50 * 1024 * 1024,
       env: {
         ...process.env,
-        // Ensure non-interactive mode
         CI: 'true',
       },
     });
@@ -84,7 +194,6 @@ async function analyzeRepository(repoDir, prompt, options = {}) {
 
     proc.on('close', (code) => {
       if (code === 0 || stdout.length > 0) {
-        // Claude Code may exit with non-zero but still produce output
         resolve({
           text: stdout.trim(),
           raw: null,
@@ -105,7 +214,6 @@ async function analyzeRepository(repoDir, prompt, options = {}) {
       }
     });
 
-    // Handle timeout
     const timeoutId = setTimeout(() => {
       proc.kill('SIGTERM');
       reject(new Error('Claude Code timeout'));
