@@ -3,8 +3,8 @@ const config = require('../config');
 const path = require('path');
 const fs = require('fs').promises;
 
-// Default timeout for Claude Code CLI (10 minutes for Opus 4.5)
-const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
+// Default timeout for Claude Code CLI (6 minutes)
+const DEFAULT_TIMEOUT_MS = 6 * 60 * 1000;
 
 // Maximum characters to include from each file (reduced for faster processing)
 const MAX_FILE_CHARS = 5000;
