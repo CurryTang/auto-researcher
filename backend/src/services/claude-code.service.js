@@ -139,7 +139,7 @@ async function readSourceFiles(repoDir, files, totalLimit = 100000) {
 async function analyzeRepository(repoDir, prompt, options = {}) {
   const claudePath = config.claudeCli?.path || 'claude';
   const timeoutMs = options.timeout || DEFAULT_TIMEOUT_MS;
-  const model = config.claudeCli?.model || 'claude-sonnet-4-5-20250514';
+  const model = config.claudeCli?.model || '';  // Empty = use default (Opus 4.5)
 
   // Read key files and source files to include in prompt
   console.log(`[Claude Code] Reading repository files from: ${repoDir}`);
@@ -165,11 +165,15 @@ ${sourceFilesContent}`;
     const args = [
       '-p', fullPrompt,
       '--print',
-      '--model', model,
       '--tools', '',  // Disable tools to avoid duplicate tool_use ID bug
     ];
 
-    console.log(`[Claude Code] Running in: ${repoDir} with model: ${model}`);
+    // Only add model flag if specified
+    if (model) {
+      args.push('--model', model);
+    }
+
+    console.log(`[Claude Code] Running in: ${repoDir} with model: ${model || 'default (Opus 4.5)'}`);
 
     // Build environment with API key if available
     const spawnEnv = {

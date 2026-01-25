@@ -49,7 +49,7 @@ module.exports = {
   // Claude Code CLI Configuration
   claudeCli: {
     path: process.env.CLAUDE_CLI_PATH || 'claude',
-    model: process.env.CLAUDE_CLI_MODEL || 'claude-sonnet-4-20250514',
+    model: process.env.CLAUDE_CLI_MODEL || '',  // Empty = use default (Opus 4.5)
     apiKey: process.env.ANTHROPIC_API_KEY,
   },
 
