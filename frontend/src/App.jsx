@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import DocumentList from './components/DocumentList';
-import Settings from './components/Settings';
 import NotesModal from './components/NotesModal';
 
-// Default API URL - can be changed in settings
-const DEFAULT_API_URL = 'http://138.68.5.132:3000/api';
+// API URL - hardcoded for production
+const API_URL = 'http://138.68.5.132:3000/api';
 
 function App() {
   const [documents, setDocuments] = useState([]);
@@ -13,12 +12,8 @@ function App() {
   const [error, setError] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [offset, setOffset] = useState(0);
-  const [showSettings, setShowSettings] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [initialNotesTab, setInitialNotesTab] = useState('paper');
-  const [apiUrl, setApiUrl] = useState(() => {
-    return localStorage.getItem('apiUrl') || DEFAULT_API_URL;
-  });
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,7 +33,7 @@ function App() {
     const currentOffset = reset ? 0 : offset;
 
     try {
-      const response = await axios.get(`${apiUrl}/documents`, {
+      const response = await axios.get(`${API_URL}/documents`, {
         params: {
           limit: LIMIT,
           offset: currentOffset,
@@ -75,12 +70,12 @@ function App() {
   useEffect(() => {
     fetchDocuments(true);
     fetchTags();
-  }, [apiUrl]);
+  }, []);
 
   // Fetch available tags
   const fetchTags = async () => {
     try {
-      const response = await axios.get(`${apiUrl}/tags`);
+      const response = await axios.get(`${API_URL}/tags`);
       setAllTags(response.data.tags || []);
     } catch (err) {
       console.error('Failed to fetch tags:', err);
@@ -100,19 +95,10 @@ function App() {
     return matchesSearch && matchesTag;
   });
 
-  // Handle API URL change
-  const handleApiUrlChange = (newUrl) => {
-    localStorage.setItem('apiUrl', newUrl);
-    setApiUrl(newUrl);
-    setDocuments([]);
-    setOffset(0);
-    setHasMore(true);
-  };
-
   // Get download URL for a document
   const getDownloadUrl = async (document) => {
     try {
-      const response = await axios.get(`${apiUrl}/documents/${document.id}/download`);
+      const response = await axios.get(`${API_URL}/documents/${document.id}/download`);
       return response.data.downloadUrl;
     } catch (err) {
       console.error('Failed to get download URL:', err);
@@ -123,7 +109,7 @@ function App() {
   // Toggle read status for a document
   const toggleReadStatus = async (document) => {
     try {
-      const response = await axios.patch(`${apiUrl}/documents/${document.id}/read`);
+      const response = await axios.patch(`${API_URL}/documents/${document.id}/read`);
       const { isRead } = response.data;
 
       // Update the document in state
@@ -143,7 +129,7 @@ function App() {
   // Trigger code analysis for a document
   const triggerCodeAnalysis = async (document) => {
     try {
-      const response = await axios.post(`${apiUrl}/code-analysis/${document.id}`);
+      const response = await axios.post(`${API_URL}/code-analysis/${document.id}`);
 
       // Update the document in state with new status
       setDocuments((prev) =>
@@ -188,13 +174,6 @@ function App() {
             title="Search & Filter"
           >
             🔍
-          </button>
-          <button
-            className="settings-btn"
-            onClick={() => setShowSettings(!showSettings)}
-            title="Settings"
-          >
-            ⚙️
           </button>
         </div>
       </header>
@@ -258,14 +237,6 @@ function App() {
         </div>
       )}
 
-      {showSettings && (
-        <Settings
-          apiUrl={apiUrl}
-          onApiUrlChange={handleApiUrlChange}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
-
       <main className="main">
         {error && (
           <div className="error-banner">
@@ -326,7 +297,7 @@ function App() {
       {selectedDocument && (
         <NotesModal
           document={selectedDocument}
-          apiUrl={apiUrl}
+          apiUrl={API_URL}
           initialTab={initialNotesTab}
           onClose={() => setSelectedDocument(null)}
         />
