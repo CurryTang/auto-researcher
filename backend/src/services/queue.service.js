@@ -126,6 +126,11 @@ class QueueService {
       args.push(extraData.hasCode ? 1 : 0);
     }
 
+    if (extraData.codeUrl) {
+      extraSets += ', code_url = ?';
+      args.push(extraData.codeUrl);
+    }
+
     args.push(documentId);
 
     // Update document

@@ -62,7 +62,7 @@ async function initDatabase() {
     { name: 'processing_completed_at', definition: 'DATETIME' },
     { name: 'is_read', definition: 'INTEGER DEFAULT 0' },
     // Auto-reader mode columns
-    { name: 'reader_mode', definition: "TEXT DEFAULT 'vanilla'" },
+    { name: 'reader_mode', definition: "TEXT DEFAULT 'auto_reader'" },
     { name: 'code_notes_s3_key', definition: 'TEXT' },
     { name: 'has_code', definition: 'INTEGER DEFAULT 0' },
     { name: 'code_url', definition: 'TEXT' },
@@ -168,6 +168,52 @@ Why this paper might be important for researchers.`
   await db.execute(`
     CREATE INDEX IF NOT EXISTS idx_processing_history_started ON processing_history(started_at DESC)
   `);
+
+  // Create code analysis queue table
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS code_analysis_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      document_id INTEGER NOT NULL UNIQUE,
+      status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'processing', 'completed', 'failed')),
+      priority INTEGER DEFAULT 0,
+      error_message TEXT,
+      scheduled_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      started_at DATETIME,
+      completed_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+    )
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_code_analysis_queue_status ON code_analysis_queue(status, scheduled_at)
+  `);
+
+  // Create code analysis history table for rate limiting (3 per 6 hours)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS code_analysis_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      document_id INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      started_at DATETIME NOT NULL,
+      completed_at DATETIME,
+      duration_ms INTEGER,
+      error_message TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+    )
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_code_analysis_history_started ON code_analysis_history(started_at DESC)
+  `);
+
+  // Add code_analysis_status column to documents (migration-safe)
+  try {
+    await db.execute(`ALTER TABLE documents ADD COLUMN code_analysis_status TEXT DEFAULT NULL`);
+  } catch (err) {
+    // Column already exists, ignore
+  }
 
   console.log('Database initialized');
   return db;

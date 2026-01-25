@@ -186,6 +186,101 @@ async function fetchPdf(paperId) {
   return fetchWithRedirect(pdfUrl);
 }
 
+/**
+ * Try to find code repository URL for an arXiv paper
+ * Uses Papers with Code API and abstract parsing
+ * @param {string} paperId - arXiv paper ID
+ * @param {string} abstract - Paper abstract (optional)
+ * @returns {Promise<string|null>} - GitHub URL or null
+ */
+async function findCodeUrl(paperId, abstract = '') {
+  // Method 1: Try Papers with Code API
+  try {
+    const pwcUrl = `https://paperswithcode.com/api/v1/papers/?arxiv_id=${paperId}`;
+    const codeUrl = await new Promise((resolve) => {
+      https.get(pwcUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        timeout: 10000,
+      }, (response) => {
+        let data = '';
+        response.on('data', (chunk) => { data += chunk; });
+        response.on('end', () => {
+          try {
+            const result = JSON.parse(data);
+            if (result.results && result.results.length > 0) {
+              const paper = result.results[0];
+              // Get the repository URL if available
+              if (paper.repository_url) {
+                resolve(paper.repository_url);
+                return;
+              }
+            }
+            resolve(null);
+          } catch {
+            resolve(null);
+          }
+        });
+        response.on('error', () => resolve(null));
+      }).on('error', () => resolve(null));
+    });
+
+    if (codeUrl) {
+      console.log(`[arXiv] Found code URL via Papers with Code: ${codeUrl}`);
+      return codeUrl;
+    }
+
+    // Try to get repo from paper's repos endpoint
+    const reposUrl = `https://paperswithcode.com/api/v1/papers/${paperId}/repositories/`;
+    const repoUrl = await new Promise((resolve) => {
+      https.get(reposUrl, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        timeout: 10000,
+      }, (response) => {
+        let data = '';
+        response.on('data', (chunk) => { data += chunk; });
+        response.on('end', () => {
+          try {
+            const result = JSON.parse(data);
+            if (result.results && result.results.length > 0) {
+              // Get the first official or most starred repo
+              const official = result.results.find(r => r.is_official);
+              const repo = official || result.results[0];
+              if (repo && repo.url) {
+                resolve(repo.url);
+                return;
+              }
+            }
+            resolve(null);
+          } catch {
+            resolve(null);
+          }
+        });
+        response.on('error', () => resolve(null));
+      }).on('error', () => resolve(null));
+    });
+
+    if (repoUrl) {
+      console.log(`[arXiv] Found code URL via PWC repos: ${repoUrl}`);
+      return repoUrl;
+    }
+  } catch (error) {
+    console.log(`[arXiv] Papers with Code API error: ${error.message}`);
+  }
+
+  // Method 2: Extract GitHub links from abstract
+  if (abstract) {
+    const githubPattern = /https?:\/\/github\.com\/[\w-]+\/[\w.-]+/gi;
+    const matches = abstract.match(githubPattern);
+    if (matches && matches.length > 0) {
+      const githubUrl = matches[0].replace(/\.+$/, ''); // Remove trailing dots
+      console.log(`[arXiv] Found code URL in abstract: ${githubUrl}`);
+      return githubUrl;
+    }
+  }
+
+  return null;
+}
+
 module.exports = {
   parseArxivUrl,
   isArxivUrl,
@@ -193,4 +288,5 @@ module.exports = {
   getAbsUrl,
   fetchMetadata,
   fetchPdf,
+  findCodeUrl,
 };

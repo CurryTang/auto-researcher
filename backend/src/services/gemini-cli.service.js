@@ -1,8 +1,19 @@
 const { spawn } = require('child_process');
 const config = require('../config');
+const path = require('path');
+const fs = require('fs').promises;
 
 // Default timeout for Gemini CLI (5 minutes)
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+
+// Timeout for code analysis (15 minutes)
+const CODE_ANALYSIS_TIMEOUT_MS = 15 * 60 * 1000;
+
+// Maximum characters to include from each file
+const MAX_FILE_CHARS = 8000;
+
+// Maximum total characters for all source files
+const MAX_TOTAL_SOURCE_CHARS = 60000;
 
 /**
  * Check if Gemini CLI is available
@@ -195,9 +206,232 @@ async function readMarkdown(markdownContent, prompt, options = {}) {
   });
 }
 
+/**
+ * Read key repository files for context
+ * @param {string} repoDir - Repository directory
+ * @returns {Promise<string>} - Combined file contents
+ */
+async function readKeyFiles(repoDir) {
+  const keyFiles = [
+    'README.md',
+    'README.rst',
+    'README',
+    'requirements.txt',
+    'setup.py',
+    'pyproject.toml',
+    'package.json',
+    'Cargo.toml',
+    'go.mod',
+    'Makefile',
+    'CMakeLists.txt',
+  ];
+
+  let context = '';
+
+  for (const file of keyFiles) {
+    try {
+      const filePath = path.join(repoDir, file);
+      const content = await fs.readFile(filePath, 'utf-8');
+      const truncated = content.substring(0, MAX_FILE_CHARS);
+      context += `\n\n### File: ${file}\n\`\`\`\n${truncated}\n\`\`\``;
+      if (content.length > MAX_FILE_CHARS) {
+        context += `\n(truncated, original ${content.length} chars)`;
+      }
+    } catch {
+      // File doesn't exist, skip
+    }
+  }
+
+  return context;
+}
+
+/**
+ * Find source files in the repository
+ * @param {string} repoDir - Repository directory
+ * @returns {Promise<string[]>} - List of source file paths
+ */
+async function findSourceFiles(repoDir) {
+  return new Promise((resolve) => {
+    const proc = spawn('find', [
+      '.', '-type', 'f',
+      '(', '-name', '*.py', '-o', '-name', '*.js', '-o', '-name', '*.ts', '-o',
+      '-name', '*.rs', '-o', '-name', '*.go', '-o', '-name', '*.java', '-o',
+      '-name', '*.cpp', '-o', '-name', '*.c', '-o', '-name', '*.h', ')',
+      '-not', '-path', '*/.*',
+      '-not', '-path', '*node_modules*',
+      '-not', '-path', '*__pycache__*',
+      '-not', '-path', '*target*',
+      '-not', '-path', '*build*',
+      '-not', '-path', '*dist*',
+    ], { cwd: repoDir });
+
+    let output = '';
+    proc.stdout.on('data', (data) => { output += data.toString(); });
+    proc.on('close', () => {
+      const files = output.trim().split('\n').filter(Boolean).slice(0, 40);
+      resolve(files);
+    });
+    proc.on('error', () => { resolve([]); });
+  });
+}
+
+/**
+ * Read specific source files (up to limit)
+ * @param {string} repoDir - Repository directory
+ * @param {string[]} files - List of files to read
+ * @param {number} totalLimit - Total character limit
+ * @returns {Promise<string>} - Combined file contents
+ */
+async function readSourceFiles(repoDir, files, totalLimit = MAX_TOTAL_SOURCE_CHARS) {
+  let context = '';
+  let totalChars = 0;
+
+  for (const file of files) {
+    if (totalChars >= totalLimit) break;
+
+    try {
+      const filePath = path.join(repoDir, file);
+      const content = await fs.readFile(filePath, 'utf-8');
+      const remaining = totalLimit - totalChars;
+      const maxPerFile = Math.min(6000, remaining);
+      const truncated = content.substring(0, maxPerFile);
+      context += `\n\n### File: ${file}\n\`\`\`\n${truncated}\n\`\`\``;
+      totalChars += truncated.length;
+      if (content.length > maxPerFile) {
+        context += `\n(truncated, original ${content.length} chars)`;
+      }
+    } catch {
+      // Skip files that can't be read
+    }
+  }
+
+  return context;
+}
+
+/**
+ * Get directory tree structure
+ * @param {string} repoDir - Repository directory
+ * @returns {Promise<string>} - Tree structure
+ */
+async function getDirectoryTree(repoDir) {
+  return new Promise((resolve) => {
+    const proc = spawn('find', [
+      '.', '-type', 'f',
+      '-not', '-path', '*/.*',
+      '-not', '-path', '*node_modules*',
+      '-not', '-path', '*__pycache__*',
+      '-not', '-path', '*target*',
+      '-not', '-path', '*.git*',
+      '-not', '-path', '*build*',
+      '-not', '-path', '*dist*',
+    ], { cwd: repoDir });
+
+    let output = '';
+    proc.stdout.on('data', (data) => { output += data.toString(); });
+    proc.on('close', () => {
+      const files = output.trim().split('\n').filter(Boolean).slice(0, 150);
+      resolve(files.join('\n'));
+    });
+    proc.on('error', () => { resolve(''); });
+  });
+}
+
+/**
+ * Analyze a code repository using Gemini CLI
+ * @param {string} repoDir - Path to the cloned repository
+ * @param {string} prompt - The analysis prompt
+ * @param {object} options - Additional options
+ * @returns {Promise<{text: string, raw: object}>}
+ */
+async function analyzeRepository(repoDir, prompt, options = {}) {
+  const geminiPath = config.geminiCli?.path || 'gemini';
+  const timeoutMs = options.timeout || CODE_ANALYSIS_TIMEOUT_MS;
+  // Use gemini-3-flash-preview for code analysis (fast and capable)
+  const model = options.model || 'gemini-3-flash-preview';
+
+  console.log(`[Gemini CLI] Analyzing repository: ${repoDir}`);
+
+  // Read repository contents to include in the prompt
+  const keyFilesContent = await readKeyFiles(repoDir);
+  const sourceFiles = await findSourceFiles(repoDir);
+  const sourceFilesContent = await readSourceFiles(repoDir, sourceFiles);
+  const directoryTree = await getDirectoryTree(repoDir);
+
+  // Build full prompt with file contents
+  const fullPrompt = `${prompt}
+
+## 仓库目录结构
+\`\`\`
+${directoryTree}
+\`\`\`
+
+## 关键配置文件
+${keyFilesContent}
+
+## 源代码文件
+${sourceFilesContent}
+
+请基于以上内容进行分析。`;
+
+  console.log(`[Gemini CLI] Prompt size: ${fullPrompt.length} chars, model: ${model}`);
+
+  return new Promise((resolve, reject) => {
+    const args = ['-m', model, fullPrompt];
+
+    const proc = spawn(geminiPath, args, {
+      timeout: timeoutMs,
+      maxBuffer: 50 * 1024 * 1024,
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    proc.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on('close', (code) => {
+      if (code === 0) {
+        console.log(`[Gemini CLI] Response received: ${stdout.length} chars`);
+        resolve({
+          text: stdout.trim(),
+          raw: null,
+        });
+      } else {
+        reject(new Error(`Gemini CLI exited with code ${code}: ${stderr || stdout}`));
+      }
+    });
+
+    proc.on('error', (error) => {
+      if (error.code === 'ETIMEDOUT') {
+        reject(new Error('Gemini CLI timeout'));
+      } else if (error.code === 'ENOENT') {
+        reject(new Error(`Gemini CLI not found at path: ${geminiPath}`));
+      } else {
+        reject(error);
+      }
+    });
+
+    // Handle timeout
+    const timeoutHandle = setTimeout(() => {
+      proc.kill('SIGTERM');
+      reject(new Error('Gemini CLI timeout'));
+    }, timeoutMs);
+
+    proc.on('close', () => {
+      clearTimeout(timeoutHandle);
+    });
+  });
+}
+
 module.exports = {
   isAvailable,
   readDocument,
   readWithPrompts,
   readMarkdown,
+  analyzeRepository,
 };

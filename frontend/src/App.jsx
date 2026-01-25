@@ -140,6 +140,40 @@ function App() {
     }
   };
 
+  // Trigger code analysis for a document
+  const triggerCodeAnalysis = async (document) => {
+    try {
+      const response = await axios.post(`${apiUrl}/code-analysis/${document.id}`);
+
+      // Update the document in state with new status
+      setDocuments((prev) =>
+        prev.map((doc) =>
+          doc.id === document.id ? { ...doc, codeAnalysisStatus: 'queued' } : doc
+        )
+      );
+
+      return response.data;
+    } catch (err) {
+      console.error('Failed to trigger code analysis:', err);
+      const message = err.response?.data?.message || err.response?.data?.error || 'Failed to queue analysis';
+
+      // If already in progress, update the UI to show processing state
+      if (message.includes('already in progress')) {
+        setDocuments((prev) =>
+          prev.map((doc) =>
+            doc.id === document.id ? { ...doc, codeAnalysisStatus: 'processing' } : doc
+          )
+        );
+        // Don't throw error, just return
+        return { success: false, message };
+      }
+
+      const error = new Error(message);
+      error.response = err.response;
+      throw error;
+    }
+  };
+
   return (
     <div className="app">
       <header className="header">
@@ -248,6 +282,7 @@ function App() {
             setInitialNotesTab(tab);
           }}
           onToggleRead={toggleReadStatus}
+          onTriggerCodeAnalysis={triggerCodeAnalysis}
           loading={loading && documents.length === 0}
         />
 

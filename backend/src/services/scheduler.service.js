@@ -143,6 +143,9 @@ class SchedulerService {
         if (result.hasCode !== undefined) {
           extraData.hasCode = result.hasCode;
         }
+        if (result.codeUrl) {
+          extraData.codeUrl = result.codeUrl;
+        }
 
         await queueService.markCompleted(item.documentId, result.notesS3Key, result.pageCount, extraData);
 

@@ -1,6 +1,6 @@
 import DocumentCard from './DocumentCard';
 
-function DocumentList({ documents, onDownload, onViewNotes, onToggleRead, loading }) {
+function DocumentList({ documents, onDownload, onViewNotes, onToggleRead, onTriggerCodeAnalysis, loading }) {
   if (loading) {
     return (
       <div className="loading-container">
@@ -26,6 +26,7 @@ function DocumentList({ documents, onDownload, onViewNotes, onToggleRead, loadin
               onDownload={onDownload}
               onViewNotes={onViewNotes}
               onToggleRead={onToggleRead}
+              onTriggerCodeAnalysis={onTriggerCodeAnalysis}
             />
           ))}
         </>
@@ -41,6 +42,7 @@ function DocumentList({ documents, onDownload, onViewNotes, onToggleRead, loadin
               onDownload={onDownload}
               onViewNotes={onViewNotes}
               onToggleRead={onToggleRead}
+              onTriggerCodeAnalysis={onTriggerCodeAnalysis}
             />
           ))}
         </>

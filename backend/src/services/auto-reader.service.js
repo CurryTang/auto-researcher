@@ -34,9 +34,11 @@ const PAPER_PASS_1_PROMPT = `你是一位专业的学术论文阅读助手。这
 3. 读结论
 4. 扫描参考文献
 
-## 需要收集的信息
+## 输出要求
+- 只输出JSON代码块，不要包含任何开场白或说明性文字
+- 不要说"我已完成..."之类的话
 
-请按以下JSON格式输出：
+请直接按以下JSON格式输出：
 
 \`\`\`json
 {
@@ -69,7 +71,13 @@ const PAPER_PASS_2_PROMPT = `你是一位专业的学术论文阅读助手。这
 ## 任务
 聚焦阅读第一轮标记的关键页面，把握论文内容但不深入细节。
 
-请输出以下Markdown格式：
+## 输出要求
+- 直接输出Markdown内容，不要包含任何开场白或说明性文字
+- 不要使用<details>或<summary>标签
+- 不要说"我已完成..."之类的话
+- **重要**: 对于每个关键图表，必须用ASCII字符画出文本图来复现其内容
+
+请直接输出以下Markdown格式：
 
 ### 核心问题
 [论文要解决什么问题？为什么这个问题重要？]
@@ -79,9 +87,39 @@ const PAPER_PASS_2_PROMPT = `你是一位专业的学术论文阅读助手。这
 
 ### 关键图表解读
 
-**Figure X**: [这个图说明了什么]
+对于每个重要的图表，请按以下格式输出：
 
-**Table Y**: [这个表的关键发现]
+**Figure X: [图标题]**
+
+[这个图说明了什么，1-2句话]
+
+\`\`\`
+[用ASCII字符画复现图的内容，例如：]
+
+        ┌──────────┐     ┌──────────┐     ┌──────────┐
+        │  Input   │────▶│ Encoder  │────▶│  Output  │
+        └──────────┘     └──────────┘     └──────────┘
+              │                                 ▲
+              │          ┌──────────┐          │
+              └─────────▶│ Decoder  │──────────┘
+                         └──────────┘
+\`\`\`
+
+**Table Y: [表标题]**
+
+[这个表的关键发现]
+
+\`\`\`
+[用ASCII字符画复现表格，例如：]
+
++------------+--------+--------+--------+
+| Method     | BLEU   | ROUGE  | F1     |
++------------+--------+--------+--------+
+| Baseline   | 32.1   | 45.2   | 38.5   |
+| Ours       | 45.3   | 58.7   | 51.2   |
+| Ours+      | 48.2   | 61.3   | 54.1   |
++------------+--------+--------+--------+
+\`\`\`
 
 ### 实验设置
 - **数据集**:
@@ -106,72 +144,101 @@ const PAPER_PASS_3_PROMPT = `你是一位专业的学术论文阅读助手。这
 {previous_notes}
 
 ## 任务
-深入方法细节，构建数学框架，生成可视化图表。
+深入方法细节，构建数学框架。
 
-请输出以下Markdown格式：
+## 输出要求
+- 直接输出Markdown内容，不要包含任何开场白或说明性文字
+- 不要使用<details>或<summary>标签
+- 不要说"我已完成..."之类的话
+- 数学公式使用 $...$ 或 $$...$$ 格式
+- **重要**: 必须用ASCII字符画出完整的方法架构图和数据流程图
+
+请直接输出以下Markdown格式：
+
+---
+
+## 深度解析
 
 ### 数学框架
 
-#### 问题形式化
+**问题形式化**
+
 设输入空间 $\\mathcal{X}$，输出空间 $\\mathcal{Y}$，目标是学习映射...
 [具体问题定义]
 
-#### 方法形式化
-[用数学语言重新表述方法]
+**关键公式**
 
-#### 关键公式
 $$
-[核心公式]
+[核心公式，使用 LaTeX 格式]
 $$
+
+### 方法架构图
+
+用ASCII字符画出完整的系统架构：
+
+\`\`\`
+[画出方法的完整架构图，展示各组件之间的关系，例如：]
+
+                         ┌─────────────────────────────────────┐
+                         │           System Overview           │
+                         └─────────────────────────────────────┘
+                                          │
+            ┌─────────────────────────────┼─────────────────────────────┐
+            │                             │                             │
+            ▼                             ▼                             ▼
+    ┌───────────────┐           ┌───────────────┐           ┌───────────────┐
+    │   Module A    │           │   Module B    │           │   Module C    │
+    │  (功能描述)   │──────────▶│  (功能描述)   │──────────▶│  (功能描述)   │
+    └───────────────┘           └───────────────┘           └───────────────┘
+            │                             │                             │
+            └─────────────────────────────┼─────────────────────────────┘
+                                          ▼
+                                  ┌───────────────┐
+                                  │    Output     │
+                                  └───────────────┘
+\`\`\`
+
+### 数据流程图
+
+\`\`\`
+[画出数据如何在系统中流动，例如：]
+
+Input Data ──▶ Preprocessing ──▶ Feature Extraction ──▶ Model ──▶ Output
+     │              │                    │                │
+     │              ▼                    ▼                ▼
+     │         [处理细节]           [特征类型]        [模型结构]
+     │
+     └──▶ Augmentation ──┘
+\`\`\`
 
 ### 方法深度解析
+
 [详细方法描述，每个组件的作用，关键设计选择]
 
 ### 创新点分析
+
 1. **[创新点1]**: [意义和价值]
 2. **[创新点2]**: [意义和价值]
 
 ### 局限性与假设
+
 - **隐含假设**: [论文未明说但必须成立的假设]
 - **适用范围**: [方法在什么条件下有效]
 - **潜在问题**: [可能的失效场景]
 
-### 与其他工作的联系
+### 相关工作对比
 
-| 相关工作 | 区别 | 联系 |
-|---------|------|------|
-| [工作1] | | |
-| [工作2] | | |
+- **[相关工作1]**: [区别和联系]
+- **[相关工作2]**: [区别和联系]
 
 ### 未来工作想法
+
 1. [想法1]
 2. [想法2]
 
-### 论文结构图 (Excalidraw JSON)
-请生成一个展示论文整体结构和逻辑流程的图：问题定义 → 方法核心模块 → 实验验证 → 主要结论
+### 核心流程总结
 
-\`\`\`excalidraw-paper_outline
-{
-  "type": "excalidraw",
-  "version": 2,
-  "elements": [
-    // 在这里生成完整的Excalidraw元素JSON
-  ]
-}
-\`\`\`
-
-### 方法流程图 (Excalidraw JSON)
-请生成一个详细展示方法的图：输入 → 每个处理步骤 → 中间表示 → 输出
-
-\`\`\`excalidraw-paper_method
-{
-  "type": "excalidraw",
-  "version": 2,
-  "elements": [
-    // 在这里生成完整的Excalidraw元素JSON
-  ]
-}
-\`\`\``;
+用一段文字描述论文的核心流程：从输入到输出，经过哪些关键步骤，每步做什么。`;
 
 // ============== PROMPT FOR CODE ANALYSIS (SINGLE ROUND) ==============
 
@@ -263,55 +330,40 @@ class AutoReaderService {
       const updatedNotes = await fs.readFile(notesFilePath, 'utf-8');
       const pass3Prompt = PAPER_PASS_3_PROMPT.replace('{previous_notes}', updatedNotes);
       const pass3Result = await this.executePass(tempFilePath, pass3Prompt, notesFilePath, 3);
-      await this.appendToNotesFile(notesFilePath, '\n\n---\n\n## 第三轮笔记\n\n' + pass3Result.text);
+      await this.appendToNotesFile(notesFilePath, '\n\n' + pass3Result.text);
 
-      // Step 5: Extract and convert excalidraw figures
-      const figures = await this.extractAndConvertFigures(pass3Result.text, documentId);
+      // Step 5: Generate final paper notes (Mermaid diagrams render natively in markdown)
+      let finalNotes = await fs.readFile(notesFilePath, 'utf-8');
 
-      // Step 6: Add reading log
-      await this.appendReadingLog(notesFilePath);
+      // Step 8: If has code, fetch README for basic code info (non-fatal)
+      let codeReadme = null;
+      if (hasCode && codeUrl) {
+        console.log(`[AutoReader] === 获取代码README: ${codeUrl} ===`);
+        try {
+          codeReadme = await this.fetchGitHubReadme(codeUrl);
+          if (codeReadme) {
+            // Add code overview section to paper notes (without blockquote formatting)
+            finalNotes += '\n\n---\n\n## 代码仓库概览\n\n';
+            finalNotes += `**仓库地址**: [${codeUrl}](${codeUrl})\n\n`;
+            finalNotes += codeReadme;
+            finalNotes += '\n\n*点击"代码分析"按钮获取详细的代码解读*\n';
+          }
+        } catch (readmeError) {
+          console.log(`[AutoReader] README fetch failed (non-fatal):`, readmeError.message);
+        }
+      }
 
-      // Step 7: Generate final paper_notes.md with embedded figures
-      const finalNotes = await this.generateFinalPaperNotes(notesFilePath, figures, title, documentId);
-
-      // Step 8: Upload paper notes to S3 FIRST (before code analysis which can fail)
+      // Step 6: Upload paper notes to S3
       const paperNotesS3Key = await this.uploadNotesToS3(finalNotes, documentId, title, 'paper_notes');
       console.log(`[AutoReader] Paper notes uploaded to S3: ${paperNotesS3Key}`);
-
-      // Upload paper figures to S3
-      for (const figure of figures) {
-        if (figure.pngPath) {
-          await this.uploadFigureToS3(figure.pngPath, documentId, figure.name);
-        }
-      }
-
-      // Step 9: If has code, analyze it (non-fatal - paper notes already saved)
-      let codeNotes = null;
-      let codeNotesS3Key = null;
-      if (hasCode && codeUrl) {
-        console.log(`[AutoReader] === 分析代码仓库: ${codeUrl} ===`);
-        try {
-          codeNotes = await this.analyzeCodeRepository(codeUrl, documentId, title);
-          if (codeNotes) {
-            codeNotesS3Key = await this.uploadNotesToS3(codeNotes, documentId, title, 'code_notes');
-            console.log(`[AutoReader] Code notes uploaded to S3: ${codeNotesS3Key}`);
-          }
-        } catch (codeError) {
-          console.log(`[AutoReader] Code analysis failed (non-fatal):`, codeError);
-          console.log(`[AutoReader] Error message: ${codeError?.message || codeError}`);
-          // Continue without code notes - paper notes are already saved
-        }
-      }
-
       console.log(`[AutoReader] Processing complete for: ${title}`);
 
       return {
         notesS3Key: paperNotesS3Key,
-        codeNotesS3Key,
+        codeNotesS3Key: null,  // Code notes only available via manual trigger
         pageCount: pdfInfo.pageCount,
         hasCode,
         codeUrl,
-        figures: figures.map(f => f.name),
         readerMode: 'auto_reader',
       };
     } finally {
@@ -363,18 +415,17 @@ class AutoReaderService {
    */
   async appendPass1Notes(filePath, data, rawText) {
     const notes = `
-## 元信息
+## 概览
 
-| 属性 | 内容 |
-|-----|------|
-| 论文类型 | ${data.paper_type || '未知'} |
-| 发表venue | ${data.venue || '未知'} |
-| 是否有代码 | ${data.has_code ? '有' : '无'} |
-| 代码链接 | ${data.code_url || '无'} |
-| 关键页面 | ${data.key_pages || ''} |
-| 可跳过页面 | ${data.skip_pages || ''} |
+- **类型**: ${data.paper_type || '未知'} | ${data.venue || ''}
+- **代码**: ${data.has_code ? `[${data.code_url || '有'}](${data.code_url || '#'})` : '无'}
+- **关键图表**: ${data.key_figures?.length > 0 ? 'Figure ' + data.key_figures.join(', ') : '待分析'}
 
-### 5C评估
+### 核心贡献
+
+${data.core_contribution || ''}
+
+### 5C 评估
 
 - **Category**: ${data.five_c?.category || ''}
 - **Context**: ${data.five_c?.context || ''}
@@ -382,45 +433,19 @@ class AutoReaderService {
 - **Contributions**: ${data.five_c?.contributions || ''}
 - **Clarity**: ${data.five_c?.clarity || ''}
 
----
-
-## 第一轮笔记
-
-### 核心贡献
-${data.core_contribution || ''}
-
-### 主要图表
-${data.key_figures?.length > 0 ? '关键图表: Figure ' + data.key_figures.join(', ') : '待分析'}
-
 ### 初步印象
+
 ${data.initial_impression || ''}
 
-<details>
-<summary>原始输出</summary>
-
-${rawText}
-
-</details>
 `;
     await this.appendToNotesFile(filePath, notes);
   }
 
   /**
-   * Append reading log to notes
+   * Append reading log to notes (disabled - no longer needed)
    */
   async appendReadingLog(filePath) {
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    const log = `
----
-
-## 阅读日志
-
-| 日期 | 轮次 | 耗时 | 备注 |
-|-----|------|------|------|
-| ${dateStr} | 1-3 | Auto | 自动处理完成 |
-`;
-    await this.appendToNotesFile(filePath, log);
+    // Reading log disabled - not useful for users
   }
 
   /**
@@ -440,21 +465,7 @@ ${rawText}
    * Initialize the notes file with template header
    */
   async initNotesFile(filePath, title, documentId) {
-    const now = new Date();
-    const header = `---
-title: ${title}
-document_id: ${documentId}
-mode: auto_reader
-generated_at: ${now.toISOString()}
-language: zh-CN
----
-
-# ${title}
-
-> 阅读状态：处理中
-> 最后更新：${now.toISOString()}
-> 论文链接：[待填写]
-> 代码链接：[待分析]
+    const header = `# ${title}
 
 `;
     await fs.writeFile(filePath, header, 'utf-8');
@@ -553,21 +564,14 @@ language: zh-CN
   async generateFinalPaperNotes(notesFilePath, figures, title, documentId) {
     let notes = await fs.readFile(notesFilePath, 'utf-8');
 
-    // Update reading status
-    notes = notes.replace('阅读状态：处理中', '阅读状态：第3轮完成');
-
-    // Add figure references section
-    if (figures.length > 0) {
+    // Add figure references section (only for successful conversions)
+    const successfulFigures = figures.filter(f => f.pngPath);
+    if (successfulFigures.length > 0) {
       notes += '\n\n---\n\n## 图表\n\n';
-      for (const figure of figures) {
+      for (const figure of successfulFigures) {
         const figureTitle = this.getFigureTitle(figure.name);
-        if (figure.pngPath) {
-          notes += `### ${figureTitle}\n\n`;
-          notes += `![${figureTitle}](figures/${documentId}_${figure.name}.png)\n\n`;
-        } else {
-          notes += `### ${figureTitle}\n\n`;
-          notes += `*图表生成失败*\n\n`;
-        }
+        notes += `### ${figureTitle}\n\n`;
+        notes += `![${figureTitle}](figures/${documentId}_${figure.name}.png)\n\n`;
       }
     }
 
@@ -606,7 +610,7 @@ language: zh-CN
       console.log(`[AutoReader] Repository cloned to: ${repoDir}`);
 
       const now = new Date();
-      // Initialize code notes with template header
+      // Initialize code notes with template header (no blockquote)
       await fs.writeFile(codeNotesPath, `---
 title: ${title} - 代码分析
 document_id: ${documentId}
@@ -616,10 +620,7 @@ generated_at: ${now.toISOString()}
 
 # ${title} - 代码笔记
 
-> 阅读状态：处理中
-> 最后更新：${now.toISOString()}
-> 仓库地址：${codeUrl}
-> 对应论文：${title}
+**仓库地址**: [${codeUrl}](${codeUrl})
 
 `, 'utf-8');
 
@@ -755,15 +756,77 @@ generated_at: ${now.toISOString()}
     });
   }
 
+  /**
+   * Fetch README from GitHub repository
+   * @param {string} codeUrl - GitHub repository URL
+   * @returns {Promise<string|null>} - README content in markdown
+   */
+  async fetchGitHubReadme(codeUrl) {
+    try {
+      // Parse GitHub URL to get owner/repo
+      const match = codeUrl.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+      if (!match) {
+        console.log(`[AutoReader] Not a GitHub URL: ${codeUrl}`);
+        return null;
+      }
+
+      const owner = match[1];
+      const repo = match[2].replace(/\.git$/, '');
+
+      // Try to fetch README via GitHub API
+      const apiUrl = `https://api.github.com/repos/${owner}/${repo}/readme`;
+
+      const https = require('https');
+
+      return new Promise((resolve) => {
+        const req = https.get(apiUrl, {
+          headers: {
+            'Accept': 'application/vnd.github.v3.raw',
+            'User-Agent': 'auto-researcher'
+          },
+          timeout: 10000
+        }, (res) => {
+          if (res.statusCode !== 200) {
+            console.log(`[AutoReader] README fetch failed: ${res.statusCode}`);
+            resolve(null);
+            return;
+          }
+
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            // Truncate if too long
+            const maxLen = 3000;
+            if (data.length > maxLen) {
+              data = data.substring(0, maxLen) + '\n\n... (README 已截断)';
+            }
+            resolve(data);
+          });
+        });
+
+        req.on('error', (err) => {
+          console.log(`[AutoReader] README fetch error: ${err.message}`);
+          resolve(null);
+        });
+
+        req.on('timeout', () => {
+          req.destroy();
+          console.log(`[AutoReader] README fetch timeout`);
+          resolve(null);
+        });
+      });
+    } catch (e) {
+      console.log(`[AutoReader] README fetch exception: ${e.message}`);
+      return null;
+    }
+  }
+
 
   /**
    * Generate final code notes with embedded figures
    */
   async generateFinalCodeNotes(notesFilePath, figures, title, documentId) {
     let notes = await fs.readFile(notesFilePath, 'utf-8');
-
-    // Update reading status
-    notes = notes.replace('阅读状态：处理中', '阅读状态：第3轮完成');
 
     if (figures.length > 0) {
       notes += '\n\n---\n\n## 图表\n\n';

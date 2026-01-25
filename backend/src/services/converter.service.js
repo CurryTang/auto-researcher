@@ -1,5 +1,8 @@
 const puppeteer = require('puppeteer');
 
+// User agent to avoid being blocked
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
 /**
  * Convert a webpage URL to PDF
  * @param {string} url - URL of the webpage to convert
@@ -9,23 +12,66 @@ const puppeteer = require('puppeteer');
 async function convertUrlToPdf(url, options = {}) {
   const browser = await puppeteer.launch({
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-web-security',
+      '--disable-features=IsolateOrigins,site-per-process',
+    ],
   });
 
   try {
     const page = await browser.newPage();
 
+    // Set user agent to avoid being blocked
+    await page.setUserAgent(USER_AGENT);
+
     // Set a reasonable viewport
     await page.setViewport({ width: 1200, height: 800 });
 
-    // Navigate to the URL with timeout
-    await page.goto(url, {
-      waitUntil: 'networkidle0', // Wait until no network activity for 500ms
-      timeout: 60000,
-    });
+    // Try progressive loading strategies
+    let navigated = false;
+
+    // Strategy 1: Try networkidle2 (allows 2 connections) with shorter timeout
+    try {
+      console.log(`[Converter] Trying networkidle2 for ${url}`);
+      await page.goto(url, {
+        waitUntil: 'networkidle2',
+        timeout: 30000,
+      });
+      navigated = true;
+    } catch (e) {
+      console.log(`[Converter] networkidle2 failed: ${e.message}, trying domcontentloaded`);
+    }
+
+    // Strategy 2: Fall back to domcontentloaded
+    if (!navigated) {
+      try {
+        await page.goto(url, {
+          waitUntil: 'domcontentloaded',
+          timeout: 20000,
+        });
+        navigated = true;
+        // Give extra time for content to render
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      } catch (e) {
+        console.log(`[Converter] domcontentloaded failed: ${e.message}, trying load`);
+      }
+    }
+
+    // Strategy 3: Just load the page
+    if (!navigated) {
+      await page.goto(url, {
+        waitUntil: 'load',
+        timeout: 15000,
+      });
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
 
     // Wait a bit more for any late-loading content
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Get page title with fallback
     let title = 'Untitled';

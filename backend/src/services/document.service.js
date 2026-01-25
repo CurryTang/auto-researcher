@@ -30,10 +30,12 @@ function rowToDocument(row) {
     // Read status
     isRead: row.is_read === 1,
     // Auto-reader mode fields
-    readerMode: row.reader_mode || 'vanilla',
+    readerMode: row.reader_mode || 'auto_reader',
     codeNotesS3Key: row.code_notes_s3_key,
     hasCode: row.has_code === 1,
     codeUrl: row.code_url,
+    // Code analysis status
+    codeAnalysisStatus: row.code_analysis_status,
   };
 }
 
@@ -47,8 +49,8 @@ async function createDocument(data) {
   const tags = JSON.stringify(data.tags || []);
 
   const result = await db.execute({
-    sql: `INSERT INTO documents (title, type, original_url, s3_key, s3_url, file_size, mime_type, tags, notes, user_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO documents (title, type, original_url, s3_key, s3_url, file_size, mime_type, tags, notes, user_id, reader_mode)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       data.title,
       data.type || 'other',
@@ -60,6 +62,7 @@ async function createDocument(data) {
       tags,
       data.notes || null,
       data.userId || 'default_user',
+      data.readerMode || 'auto_reader',  // Default to auto_reader mode
     ],
   });
 

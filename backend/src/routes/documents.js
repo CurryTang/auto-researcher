@@ -220,7 +220,7 @@ router.get('/:id/processing-status', async (req, res) => {
 // POST /api/documents - Create new document
 router.post('/', async (req, res) => {
   try {
-    const { title, type, originalUrl, s3Key, s3Url, fileSize, mimeType, tags, notes } =
+    const { title, type, originalUrl, s3Key, s3Url, fileSize, mimeType, tags, notes, readerMode } =
       req.body;
 
     if (!title || !s3Key) {
@@ -238,6 +238,7 @@ router.post('/', async (req, res) => {
       tags: tags || [],
       notes,
       userId: req.body.userId || 'default_user',
+      readerMode: readerMode || 'auto_reader',  // Default to auto_reader mode
     });
 
     res.status(201).json(document);
@@ -276,6 +277,63 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting document:', error);
     res.status(500).json({ error: 'Failed to delete document' });
+  }
+});
+
+// POST /api/documents/:id/detect-code - Detect code URL for existing document
+router.post('/:id/detect-code', async (req, res) => {
+  try {
+    const { getDb } = require('../db');
+    const arxivService = require('../services/arxiv.service');
+    const db = getDb();
+
+    // Get document
+    const result = await db.execute({
+      sql: 'SELECT id, title, original_url, notes FROM documents WHERE id = ?',
+      args: [req.params.id],
+    });
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    const doc = result.rows[0];
+
+    // Parse arXiv ID from URL
+    const arxivId = doc.original_url ? arxivService.parseArxivUrl(doc.original_url) : null;
+
+    if (!arxivId) {
+      return res.status(400).json({ error: 'Not an arXiv document' });
+    }
+
+    // Find code URL
+    console.log(`Detecting code URL for document ${doc.id} (${arxivId})...`);
+    const codeUrl = await arxivService.findCodeUrl(arxivId, doc.notes || '');
+
+    if (codeUrl) {
+      // Update document with code URL
+      await db.execute({
+        sql: 'UPDATE documents SET code_url = ?, has_code = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+        args: [codeUrl, req.params.id],
+      });
+
+      res.json({
+        id: parseInt(req.params.id),
+        codeUrl,
+        hasCode: true,
+        message: 'Code URL detected successfully',
+      });
+    } else {
+      res.json({
+        id: parseInt(req.params.id),
+        codeUrl: null,
+        hasCode: false,
+        message: 'No code repository found',
+      });
+    }
+  } catch (error) {
+    console.error('Error detecting code URL:', error);
+    res.status(500).json({ error: 'Failed to detect code URL' });
   }
 });
 

@@ -9,6 +9,7 @@ const { initDatabase } = require('./db');
 const schedulerService = require('./services/scheduler.service');
 const readerService = require('./services/reader.service');
 const pdfService = require('./services/pdf.service');
+const codeAnalysisService = require('./services/code-analysis.service');
 
 const app = express();
 
@@ -41,6 +42,7 @@ app.get('/', (req, res) => {
       documents: '/api/documents',
       upload: '/api/upload',
       reader: '/api/reader',
+      codeAnalysis: '/api/code-analysis',
       tags: '/api/tags',
     },
   });
@@ -80,6 +82,10 @@ async function startServer() {
       schedulerService.setReaderService(readerService);
       schedulerService.start();
       console.log('Document reader scheduler started');
+
+      // Start code analysis processor
+      codeAnalysisService.startProcessor();
+      console.log('Code analysis processor started');
     } else {
       console.log('Document reader is disabled');
     }
@@ -98,12 +104,14 @@ async function startServer() {
 process.on('SIGINT', async () => {
   console.log('Shutting down gracefully...');
   schedulerService.stop();
+  codeAnalysisService.stopProcessor();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('Received SIGTERM, shutting down...');
   schedulerService.stop();
+  codeAnalysisService.stopProcessor();
   process.exit(0);
 });
 

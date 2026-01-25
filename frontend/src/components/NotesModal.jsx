@@ -1,6 +1,57 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
+import mermaid from 'mermaid';
+
+// Initialize mermaid
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'default',
+  securityLevel: 'loose',
+});
+
+// Mermaid diagram component
+function MermaidDiagram({ code }) {
+  const containerRef = useRef(null);
+  const [svg, setSvg] = useState('');
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const renderDiagram = async () => {
+      if (!code) return;
+      try {
+        const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
+        const { svg } = await mermaid.render(id, code);
+        setSvg(svg);
+        setError(null);
+      } catch (err) {
+        console.error('Mermaid render error:', err);
+        setError(err.message);
+      }
+    };
+    renderDiagram();
+  }, [code]);
+
+  if (error) {
+    return (
+      <div className="mermaid-error">
+        <p>Diagram rendering failed</p>
+        <pre>{code}</pre>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="mermaid-diagram"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+}
 
 // Parse YAML frontmatter from markdown content
 function parseFrontmatter(content) {
@@ -28,6 +79,25 @@ function parseFrontmatter(content) {
   return { metadata, content: markdownContent };
 }
 
+// Clean notes content - remove blockquotes with status info and raw output sections
+function cleanNotesContent(content) {
+  if (!content) return content;
+
+  // Remove blockquotes that contain status info (阅读状态, 论文链接, etc.)
+  content = content.replace(/^>\s*(阅读状态|论文链接|代码链接|最后更新).*$/gm, '');
+
+  // Remove <details> sections with 原始输出
+  content = content.replace(/<details>\s*<summary>原始输出<\/summary>[\s\S]*?<\/details>/g, '');
+
+  // Remove any remaining raw output sections
+  content = content.replace(/##\s*原始输出[\s\S]*?(?=\n##|\n---|\Z)/g, '');
+
+  // Clean up multiple consecutive empty lines
+  content = content.replace(/\n{4,}/g, '\n\n\n');
+
+  return content;
+}
+
 function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
   const [notes, setNotes] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,13 +107,17 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
   // Parse the paper notes content to separate frontmatter
   const parsedPaperNotes = useMemo(() => {
     if (!notes?.notesContent) return null;
-    return parseFrontmatter(notes.notesContent);
+    const parsed = parseFrontmatter(notes.notesContent);
+    parsed.content = cleanNotesContent(parsed.content);
+    return parsed;
   }, [notes?.notesContent]);
 
   // Parse the code notes content to separate frontmatter
   const parsedCodeNotes = useMemo(() => {
     if (!notes?.codeNotesContent) return null;
-    return parseFrontmatter(notes.codeNotesContent);
+    const parsed = parseFrontmatter(notes.codeNotesContent);
+    parsed.content = cleanNotesContent(parsed.content);
+    return parsed;
   }, [notes?.codeNotesContent]);
 
   useEffect(() => {
@@ -105,6 +179,31 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
       return <span className="reader-mode-badge auto-reader">Auto Reader</span>;
     }
     return <span className="reader-mode-badge vanilla">Vanilla</span>;
+  };
+
+  // Custom components for ReactMarkdown to handle mermaid and code blocks
+  const markdownComponents = {
+    code({ node, inline, className, children, ...props }) {
+      const match = /language-(\w+)/.exec(className || '');
+      const language = match ? match[1] : '';
+
+      // Render mermaid diagrams
+      if (language === 'mermaid' && !inline) {
+        return <MermaidDiagram code={String(children).replace(/\n$/, '')} />;
+      }
+
+      // Regular code blocks
+      if (!inline && language) {
+        return (
+          <pre className={`code-block language-${language}`}>
+            <code {...props}>{children}</code>
+          </pre>
+        );
+      }
+
+      // Inline code
+      return <code className="inline-code" {...props}>{children}</code>;
+    },
   };
 
   return (
@@ -189,21 +288,11 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
           {/* Paper Notes Tab */}
           {activeTab === 'paper' && notes && notes.hasNotes && parsedPaperNotes && (
             <div className="notes-markdown">
-              {parsedPaperNotes.metadata?.generated_at && (
-                <div className="notes-meta">
-                  <span className="meta-label">Generated:</span>
-                  <span className="meta-value">
-                    {new Date(parsedPaperNotes.metadata.generated_at).toLocaleString()}
-                  </span>
-                  {parsedPaperNotes.metadata?.mode && (
-                    <>
-                      <span className="meta-label">Mode:</span>
-                      <span className="meta-value">{parsedPaperNotes.metadata.mode}</span>
-                    </>
-                  )}
-                </div>
-              )}
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                components={markdownComponents}
+              >
                 {parsedPaperNotes.content}
               </ReactMarkdown>
             </div>
@@ -212,25 +301,11 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
           {/* Code Notes Tab */}
           {activeTab === 'code' && notes && notes.hasCodeNotes && parsedCodeNotes && (
             <div className="notes-markdown code-notes">
-              {parsedCodeNotes.metadata?.generated_at && (
-                <div className="notes-meta">
-                  <span className="meta-label">Generated:</span>
-                  <span className="meta-value">
-                    {new Date(parsedCodeNotes.metadata.generated_at).toLocaleString()}
-                  </span>
-                  {parsedCodeNotes.metadata?.code_url && (
-                    <>
-                      <span className="meta-label">Repository:</span>
-                      <span className="meta-value">
-                        <a href={parsedCodeNotes.metadata.code_url} target="_blank" rel="noopener noreferrer">
-                          {parsedCodeNotes.metadata.code_url}
-                        </a>
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[rehypeKatex]}
+                components={markdownComponents}
+              >
                 {parsedCodeNotes.content}
               </ReactMarkdown>
             </div>

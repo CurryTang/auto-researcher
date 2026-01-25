@@ -165,12 +165,17 @@ router.post('/arxiv', async (req, res) => {
     const key = s3Service.generateS3Key(filename, userId);
     const { location } = await s3Service.uploadBuffer(pdfBuffer, key, 'application/pdf');
 
+    // Try to find code repository URL
+    console.log(`Searching for code URL for ${arxivId}...`);
+    const codeUrl = await arxivService.findCodeUrl(arxivId, metadata.abstract);
+
     // Build notes with metadata
     const fullNotes = [
       notes || '',
       `Authors: ${metadata.authors.join(', ')}`,
       `Category: ${metadata.primaryCategory}`,
       `Published: ${metadata.published}`,
+      codeUrl ? `Code: ${codeUrl}` : '',
       '',
       `Abstract: ${metadata.abstract}`,
     ].filter(Boolean).join('\n');
@@ -188,6 +193,16 @@ router.post('/arxiv', async (req, res) => {
       notes: fullNotes,
       userId,
     });
+
+    // Update document with code URL if found
+    if (codeUrl) {
+      await documentService.updateDocument(document.id, {
+        codeUrl: codeUrl,
+        hasCode: true,
+      });
+      document.codeUrl = codeUrl;
+      document.hasCode = true;
+    }
 
     res.status(201).json({
       ...document,

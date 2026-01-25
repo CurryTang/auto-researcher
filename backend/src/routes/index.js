@@ -5,11 +5,13 @@ const documentsRouter = require('./documents');
 const uploadRouter = require('./upload');
 const tagsRouter = require('./tags');
 const readerRouter = require('./reader');
+const codeAnalysisRouter = require('./code-analysis');
 
 router.use('/documents', documentsRouter);
 router.use('/upload', uploadRouter);
 router.use('/tags', tagsRouter);
 router.use('/reader', readerRouter);
+router.use('/code-analysis', codeAnalysisRouter);
 
 // Health check endpoint
 router.get('/health', (req, res) => {
