@@ -3,11 +3,11 @@ const config = require('../config');
 const path = require('path');
 const fs = require('fs').promises;
 
-// Default timeout for Claude Code CLI (5 minutes for large prompts with file content)
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+// Default timeout for Claude Code CLI (10 minutes for Opus 4.5)
+const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 
 // Maximum characters to include from each file (reduced for faster processing)
-const MAX_FILE_CHARS = 10000;
+const MAX_FILE_CHARS = 5000;
 
 /**
  * Claude Code CLI Service
@@ -105,7 +105,7 @@ async function findSourceFiles(repoDir) {
  * @param {number} totalLimit - Total character limit
  * @returns {Promise<string>} - Combined file contents
  */
-async function readSourceFiles(repoDir, files, totalLimit = 20000) {
+async function readSourceFiles(repoDir, files, totalLimit = 10000) {
   let context = '';
   let totalChars = 0;
 
@@ -116,7 +116,7 @@ async function readSourceFiles(repoDir, files, totalLimit = 20000) {
       const filePath = path.join(repoDir, file);
       const content = await fs.readFile(filePath, 'utf-8');
       const remaining = totalLimit - totalChars;
-      const truncated = content.substring(0, Math.min(content.length, remaining, 5000));
+      const truncated = content.substring(0, Math.min(content.length, remaining, 3000));
       context += `\n\n### File: ${file}\n\`\`\`\n${truncated}\n\`\`\``;
       totalChars += truncated.length;
     } catch (e) {
