@@ -96,19 +96,37 @@ router.get('/:id/notes', async (req, res) => {
 
     const doc = result.rows[0];
 
+    // Get reading history
+    const history = await db.execute({
+      sql: `SELECT id, reader_name, reader_mode, notes, read_at
+            FROM reading_history
+            WHERE document_id = ?
+            ORDER BY read_at DESC`,
+      args: [req.params.id],
+    });
+
+    const readingHistory = history.rows.map(row => ({
+      id: row.id,
+      readerName: row.reader_name,
+      readerMode: row.reader_mode,
+      notes: row.notes,
+      readAt: row.read_at,
+    }));
+
     if (!doc.notes_s3_key) {
       // No processed notes yet
       return res.json({
         documentId: doc.id,
         title: doc.title,
         processingStatus: doc.processing_status,
-        readerMode: doc.reader_mode || 'vanilla',
+        readerMode: doc.reader_mode || 'auto_reader',
         hasNotes: false,
         hasCodeNotes: false,
         hasCode: doc.has_code === 1,
         codeUrl: doc.code_url,
         notesUrl: null,
         notesContent: null,
+        readingHistory,
       });
     }
 
@@ -145,7 +163,7 @@ router.get('/:id/notes', async (req, res) => {
       documentId: doc.id,
       title: doc.title,
       processingStatus: doc.processing_status,
-      readerMode: doc.reader_mode || 'vanilla',
+      readerMode: doc.reader_mode || 'auto_reader',
       hasNotes: true,
       hasCodeNotes: !!doc.code_notes_s3_key,
       hasCode: doc.has_code === 1,
@@ -156,6 +174,7 @@ router.get('/:id/notes', async (req, res) => {
       codeNotesUrl,
       codeNotesS3Key: doc.code_notes_s3_key,
       codeNotesContent,
+      readingHistory,
     });
   } catch (error) {
     console.error('Error getting notes:', error);
@@ -369,6 +388,97 @@ router.patch('/:id/read', async (req, res) => {
   } catch (error) {
     console.error('Error toggling read status:', error);
     res.status(500).json({ error: 'Failed to update read status' });
+  }
+});
+
+// POST /api/documents/:id/reading-history - Record a read with name and date
+router.post('/:id/reading-history', async (req, res) => {
+  try {
+    const { getDb } = require('../db');
+    const db = getDb();
+
+    const { readerName, readerMode, notes } = req.body;
+
+    if (!readerName) {
+      return res.status(400).json({ error: 'Reader name is required' });
+    }
+
+    // Check if document exists
+    const doc = await db.execute({
+      sql: 'SELECT id FROM documents WHERE id = ?',
+      args: [req.params.id],
+    });
+
+    if (doc.rows.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // Insert reading history record
+    const result = await db.execute({
+      sql: `INSERT INTO reading_history (document_id, reader_name, reader_mode, notes)
+            VALUES (?, ?, ?, ?)`,
+      args: [req.params.id, readerName, readerMode || null, notes || null],
+    });
+
+    // Also mark document as read
+    await db.execute({
+      sql: 'UPDATE documents SET is_read = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      args: [req.params.id],
+    });
+
+    res.status(201).json({
+      id: Number(result.lastInsertRowid),
+      documentId: parseInt(req.params.id),
+      readerName,
+      readerMode,
+      notes,
+      readAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Error recording reading history:', error);
+    res.status(500).json({ error: 'Failed to record reading history' });
+  }
+});
+
+// GET /api/documents/:id/reading-history - Get reading history for a document
+router.get('/:id/reading-history', async (req, res) => {
+  try {
+    const { getDb } = require('../db');
+    const db = getDb();
+
+    // Check if document exists
+    const doc = await db.execute({
+      sql: 'SELECT id, title FROM documents WHERE id = ?',
+      args: [req.params.id],
+    });
+
+    if (doc.rows.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // Get reading history
+    const history = await db.execute({
+      sql: `SELECT id, reader_name, reader_mode, notes, read_at
+            FROM reading_history
+            WHERE document_id = ?
+            ORDER BY read_at DESC`,
+      args: [req.params.id],
+    });
+
+    res.json({
+      documentId: parseInt(req.params.id),
+      title: doc.rows[0].title,
+      history: history.rows.map(row => ({
+        id: row.id,
+        readerName: row.reader_name,
+        readerMode: row.reader_mode,
+        notes: row.notes,
+        readAt: row.read_at,
+      })),
+    });
+  } catch (error) {
+    console.error('Error fetching reading history:', error);
+    res.status(500).json({ error: 'Failed to fetch reading history' });
   }
 });
 

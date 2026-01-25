@@ -215,6 +215,28 @@ Why this paper might be important for researchers.`
     // Column already exists, ignore
   }
 
+  // Create reading history table to track reads with name and date
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS reading_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      document_id INTEGER NOT NULL,
+      reader_name TEXT NOT NULL,
+      reader_mode TEXT,
+      notes TEXT,
+      read_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+    )
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_reading_history_document ON reading_history(document_id)
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_reading_history_date ON reading_history(read_at DESC)
+  `);
+
   console.log('Database initialized');
   return db;
 }
