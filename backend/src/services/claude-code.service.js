@@ -42,7 +42,7 @@ async function isAvailable() {
 async function analyzeRepository(repoDir, prompt, options = {}) {
   const claudePath = config.claudeCli?.path || 'claude';
   const timeoutMs = options.timeout || DEFAULT_TIMEOUT_MS;
-  const model = config.claudeCli?.model || 'claude-sonnet-4-5-20250514';
+  const model = config.claudeCli?.model || 'claude-sonnet-4-5-20250929';
 
   return new Promise((resolve, reject) => {
     // Claude Code CLI uses -p for prompt and --print for non-interactive output
