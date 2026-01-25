@@ -3,8 +3,8 @@ import axios from 'axios';
 import DocumentList from './components/DocumentList';
 import NotesModal from './components/NotesModal';
 
-// API URL - hardcoded for production
-const API_URL = 'http://138.68.5.132:3000/api';
+// API URL - hardcoded for production (HTTPS)
+const API_URL = 'https://auto-reader.duckdns.org/api';
 
 function App() {
   const [documents, setDocuments] = useState([]);
