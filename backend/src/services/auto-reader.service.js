@@ -175,29 +175,32 @@ $$
 
 // ============== PROMPT FOR CODE ANALYSIS (SINGLE ROUND) ==============
 
-const CODE_ANALYSIS_PROMPT = `你是代码阅读助手。请快速分析这个代码仓库。
+const CODE_ANALYSIS_PROMPT = `You are a code analysis assistant. Analyze the repository content provided below.
 
-⚠️ 重要：你必须在2分钟内完成分析并输出结果。请简洁回答，不要过度分析。
+IMPORTANT RULES:
+- DO NOT use any tools or function calls
+- DO NOT try to read additional files
+- ONLY analyze the content already provided in this prompt
+- Respond in Chinese
+- Keep your response under 500 words
 
-任务：基于提供的文件内容，快速总结仓库信息。
-
-请按以下格式输出（每项1-2句话即可）：
+Based on the file contents provided below, output your analysis in this format:
 
 ## 基本信息
-- 语言/框架:
-- 入口文件:
-- 核心目录:
+- 语言/框架: [from README or code files]
+- 入口文件: [main entry point]
+- 核心目录: [key directories]
 
 ## 运行命令
-- 安装:
-- 训练:
+- 安装: [installation command]
+- 训练: [training command if ML project]
 
 ## 核心模型
-- 模型类和位置:
-- 关键实现:
+- 模型类: [main model class and file]
+- 关键实现: [1-2 key technical points]
 
 ## 复现注意
-- (1-2个关键点)`;
+- [1-2 important notes for reproduction]`;
 
 class AutoReaderService {
   constructor() {
