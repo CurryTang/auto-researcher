@@ -2,8 +2,8 @@ const { spawn } = require('child_process');
 const config = require('../config');
 const path = require('path');
 
-// Default timeout for Claude Code CLI (5 minutes per round)
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+// Default timeout for Claude Code CLI (10 minutes per round - needs time for multiple file reads)
+const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
  * Claude Code CLI Service
@@ -50,7 +50,6 @@ async function analyzeRepository(repoDir, prompt, options = {}) {
       '-p', prompt,
       '--print',  // Non-interactive, prints result and exits
       '--model', model,  // Use specified model
-      '--allowedTools', 'Read,Glob',  // Only allow read and search tools for faster analysis
     ];
 
     // Add --allowedTools if specified (for restricting tool usage)
