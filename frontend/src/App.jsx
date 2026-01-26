@@ -204,6 +204,30 @@ function AppContent() {
     }
   };
 
+  // Delete a document (requires auth)
+  const deleteDocument = async (document) => {
+    if (!isAuthenticated) {
+      setShowLoginModal(true);
+      throw new Error('Authentication required');
+    }
+
+    try {
+      await axios.delete(
+        `${API_URL}/documents/${document.id}`,
+        { headers: getAuthHeaders() }
+      );
+
+      // Remove the document from state
+      setDocuments((prev) => prev.filter((doc) => doc.id !== document.id));
+    } catch (err) {
+      console.error('Failed to delete document:', err);
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        setShowLoginModal(true);
+      }
+      throw err;
+    }
+  };
+
   const handleAuthClick = () => {
     if (isAuthenticated) {
       logout();
@@ -345,6 +369,7 @@ function AppContent() {
           }}
           onToggleRead={toggleReadStatus}
           onTriggerCodeAnalysis={triggerCodeAnalysis}
+          onDelete={deleteDocument}
           loading={loading && documents.length === 0}
           isAuthenticated={isAuthenticated}
         />

@@ -763,6 +763,22 @@ body {
   background: var(--primary-dark);
 }
 
+/* Delete button */
+.action-btn.delete-btn {
+  background: transparent;
+  color: #dc2626;
+  border-color: #fecaca;
+  font-size: 16px;
+  font-weight: bold;
+  padding: 4px 10px;
+  min-width: 32px;
+}
+
+.action-btn.delete-btn:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #dc2626;
+}
+
 /* Read document card styling */
 .document-card.is-read {
   opacity: 0.7;

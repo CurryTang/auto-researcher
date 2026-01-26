@@ -1,9 +1,10 @@
 import { useState } from 'react';
 
-function DocumentCard({ document, onDownload, onViewNotes, onToggleRead, onTriggerCodeAnalysis }) {
+function DocumentCard({ document, onDownload, onViewNotes, onToggleRead, onTriggerCodeAnalysis, onDelete, isAuthenticated }) {
   const [downloading, setDownloading] = useState(false);
   const [togglingRead, setTogglingRead] = useState(false);
   const [triggeringAnalysis, setTriggeringAnalysis] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(null);
 
   const handleDownload = async () => {
@@ -44,6 +45,23 @@ function DocumentCard({ document, onDownload, onViewNotes, onToggleRead, onTrigg
       console.error('Code analysis error:', err);
     } finally {
       setTriggeringAnalysis(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!onDelete) return;
+    if (!window.confirm(`Delete "${document.title}"?\n\nThis cannot be undone.`)) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await onDelete(document);
+    } catch (err) {
+      setError(err.message || 'Failed to delete');
+      console.error('Delete error:', err);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -171,6 +189,16 @@ function DocumentCard({ document, onDownload, onViewNotes, onToggleRead, onTrigg
         <button className="action-btn pdf-btn" onClick={handleDownload} disabled={downloading}>
           {downloading ? '...' : 'PDF'}
         </button>
+        {isAuthenticated && (
+          <button
+            className="action-btn delete-btn"
+            onClick={handleDelete}
+            disabled={deleting}
+            title="Delete document"
+          >
+            {deleting ? '...' : '×'}
+          </button>
+        )}
         {error && <span className="download-error">{error}</span>}
       </div>
     </div>
