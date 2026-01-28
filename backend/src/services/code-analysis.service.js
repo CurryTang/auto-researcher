@@ -2,6 +2,7 @@ const { getDb } = require('../db');
 const config = require('../config');
 const geminiCliService = require('./gemini-cli.service');
 const s3Service = require('./s3.service');
+const processingProxyService = require('./processing-proxy.service');
 const { spawn } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
@@ -497,6 +498,21 @@ class CodeAnalysisService {
    * @returns {Promise<{s3Key: string, notes: string}>}
    */
   async performAnalysis(documentId, codeUrl, title) {
+    // Check if desktop processing is available
+    const desktopAvailable = await processingProxyService.isDesktopAvailable();
+
+    if (desktopAvailable) {
+      console.log(`[CodeAnalysis] Forwarding to desktop: ${title}`);
+      try {
+        return await processingProxyService.analyzeCode(documentId, codeUrl, title);
+      } catch (error) {
+        console.error('[CodeAnalysis] Desktop processing failed, falling back to local:', error.message);
+        // Continue to local processing
+      }
+    }
+
+    console.log(`[CodeAnalysis] Processing locally: ${title}`);
+
     const repoDir = path.join(this.processingDir, `code_${documentId}`);
     const notesPath = path.join(this.processingDir, `${documentId}_code_analysis.md`);
 

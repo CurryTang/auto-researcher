@@ -11,6 +11,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const arxivInfo = extractArxivInfo();
     sendResponse(arxivInfo);
   }
+  if (request.action === 'getOpenReviewInfo') {
+    const openReviewInfo = extractOpenReviewInfo();
+    sendResponse(openReviewInfo);
+  }
   return true;
 });
 
@@ -91,6 +95,87 @@ function extractArxivInfo() {
   // For PDF pages, we only have the ID
   if (window.location.pathname.includes('/pdf/')) {
     info.title = `arXiv:${arxivId}`;
+  }
+
+  return info;
+}
+
+// Check if current page is OpenReview
+function isOpenReviewPage() {
+  return window.location.hostname.includes('openreview.net');
+}
+
+// Extract OpenReview paper ID from URL
+function extractOpenReviewId() {
+  const url = window.location.href;
+
+  // Handle PDF URLs: https://openreview.net/pdf?id=XXXXX
+  const pdfMatch = url.match(/openreview\.net\/pdf\?id=([^&#]+)/i);
+  if (pdfMatch) return pdfMatch[1];
+
+  // Handle forum/paper URLs: https://openreview.net/forum?id=XXXXX
+  const forumMatch = url.match(/openreview\.net\/forum\?id=([^&#]+)/i);
+  if (forumMatch) return forumMatch[1];
+
+  return null;
+}
+
+// Extract OpenReview-specific info from the page
+function extractOpenReviewInfo() {
+  if (!isOpenReviewPage()) {
+    return { isOpenReview: false };
+  }
+
+  const paperId = extractOpenReviewId();
+  if (!paperId) {
+    return { isOpenReview: false };
+  }
+
+  const info = {
+    isOpenReview: true,
+    paperId: paperId,
+    pdfUrl: `https://openreview.net/pdf?id=${paperId}`,
+    forumUrl: `https://openreview.net/forum?id=${paperId}`,
+    title: '',
+    authors: [],
+    abstract: '',
+    venue: '',
+  };
+
+  // Try to extract from forum/paper page
+  if (window.location.pathname.includes('/forum')) {
+    // Title from h2.citation_title or .note-content-title
+    const titleEl = document.querySelector('h2.citation_title, .note-content-title');
+    if (titleEl) {
+      info.title = titleEl.textContent.trim();
+    }
+
+    // Authors from .note-authors or similar
+    const authorsEl = document.querySelector('.note-authors');
+    if (authorsEl) {
+      const authorLinks = authorsEl.querySelectorAll('a, span');
+      info.authors = Array.from(authorLinks).map(a => a.textContent.trim()).filter(a => a);
+    }
+
+    // Abstract from .note-content-value or span containing abstract
+    const abstractEl = document.querySelector('.note-content-value');
+    if (abstractEl) {
+      const abstractText = abstractEl.textContent.trim();
+      if (abstractText.length > 50) {
+        info.abstract = abstractText;
+      }
+    }
+
+    // Venue info
+    const venueEl = document.querySelector('.note-content-venue, h3 a');
+    if (venueEl) {
+      info.venue = venueEl.textContent.trim();
+    }
+  }
+
+  // For PDF pages, we only have the ID
+  if (window.location.pathname.includes('/pdf')) {
+    info.title = `OpenReview:${paperId}`;
   }
 
   return info;
@@ -240,6 +325,7 @@ function detectContentType() {
   // Academic papers
   if (
     hostname.includes('arxiv.org') ||
+    hostname.includes('openreview.net') ||
     hostname.includes('scholar.google') ||
     hostname.includes('semanticscholar') ||
     hostname.includes('doi.org') ||

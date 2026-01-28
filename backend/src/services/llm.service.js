@@ -1,4 +1,5 @@
 const config = require('../config');
+const processingProxyService = require('./processing-proxy.service');
 
 /**
  * Base class for LLM providers
@@ -254,6 +255,21 @@ class LLMService {
    * @returns {Promise<{text: string, model: string, provider: string}>}
    */
   async generateCompletion(content, prompt, providerName = 'gemini') {
+    // Try desktop processing first if available
+    const desktopAvailable = await processingProxyService.isDesktopAvailable();
+
+    if (desktopAvailable) {
+      console.log(`[LLM Service] Forwarding to desktop: ${providerName}`);
+      try {
+        return await processingProxyService.generateCompletion(content, prompt, providerName);
+      } catch (error) {
+        console.error('[LLM Service] Desktop processing failed, falling back to local:', error.message);
+        // Continue to local processing
+      }
+    }
+
+    console.log(`[LLM Service] Processing locally: ${providerName}`);
+
     const provider = this.providers[providerName];
 
     if (!provider) {

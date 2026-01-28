@@ -5,7 +5,9 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node --no-deprecation src/index.js",
-    "dev": "nodemon --no-deprecation src/index.js"
+    "dev": "nodemon --no-deprecation src/index.js",
+    "processing": "node --no-deprecation processing-server.js",
+    "processing:dev": "nodemon --no-deprecation processing-server.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.400.0",

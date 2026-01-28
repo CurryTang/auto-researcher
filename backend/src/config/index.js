@@ -109,4 +109,11 @@ module.exports = {
       baseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
     },
   },
+
+  // Desktop Processing via FRP
+  processing: {
+    enabled: process.env.PROCESSING_ENABLED !== 'false', // Enable by default
+    desktopUrl: process.env.PROCESSING_DESKTOP_URL || 'http://127.0.0.1:7001',
+    timeout: parseInt(process.env.PROCESSING_TIMEOUT) || 300000, // 5 minutes
+  },
 };

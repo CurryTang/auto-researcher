@@ -237,4 +237,74 @@ router.get('/arxiv/metadata', async (req, res) => {
   }
 });
 
+// POST /api/upload/openreview - Fetch OpenReview paper PDF and save (requires auth)
+router.post('/openreview', requireAuth, async (req, res) => {
+  try {
+    const { paperId, pdfUrl, title, tags, notes } = req.body;
+
+    if (!paperId && !pdfUrl) {
+      return res.status(400).json({ error: 'Paper ID or PDF URL is required' });
+    }
+
+    const userId = req.body.userId || 'default_user';
+
+    // Construct PDF URL if not provided
+    const openReviewPdfUrl = pdfUrl || `https://openreview.net/pdf?id=${paperId}`;
+    const forumUrl = `https://openreview.net/forum?id=${paperId}`;
+
+    console.log(`Fetching OpenReview PDF from ${openReviewPdfUrl}...`);
+
+    // Fetch PDF from OpenReview with proper headers
+    const response = await fetch(openReviewPdfUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/pdf,*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': forumUrl,
+      },
+    });
+    if (!response.ok) {
+      console.error(`OpenReview fetch failed: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to fetch OpenReview PDF: ${response.statusText}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const pdfBuffer = Buffer.from(arrayBuffer);
+
+    // Generate filename from title
+    const paperTitle = title || `OpenReview_${paperId}`;
+    const filename = `openreview_${paperId}_${paperTitle.slice(0, 30).replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+
+    // Upload to S3
+    const key = s3Service.generateS3Key(filename, userId);
+    const { location } = await s3Service.uploadBuffer(pdfBuffer, key, 'application/pdf');
+
+    // Build notes with metadata
+    const fullNotes = [
+      notes || '',
+      `OpenReview Paper ID: ${paperId}`,
+      `Forum: ${forumUrl}`,
+    ].filter(Boolean).join('\n');
+
+    // Create document record
+    const document = await documentService.createDocument({
+      title: paperTitle,
+      type: 'paper',
+      originalUrl: forumUrl,
+      s3Key: key,
+      s3Url: location,
+      fileSize: pdfBuffer.length,
+      mimeType: 'application/pdf',
+      tags: tags || [],
+      notes: fullNotes,
+      userId,
+    });
+
+    res.status(201).json(document);
+  } catch (error) {
+    console.error('Error fetching OpenReview paper:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch OpenReview paper' });
+  }
+});
+
 module.exports = router;

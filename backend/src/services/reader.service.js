@@ -6,6 +6,7 @@ const mathpixService = require('./mathpix.service');
 const llmService = require('./llm.service');
 const s3Service = require('./s3.service');
 const autoReaderService = require('./auto-reader.service');
+const processingProxyService = require('./processing-proxy.service');
 
 /**
  * Default prompt template for paper summary
@@ -42,6 +43,21 @@ class ReaderService {
    */
   async processDocument(item, options = {}) {
     const { documentId, s3Key, title, readerMode, codeUrl, hasCode } = item;
+
+    // Check if desktop processing is available
+    const desktopAvailable = await processingProxyService.isDesktopAvailable();
+
+    if (desktopAvailable) {
+      console.log(`[Reader] Forwarding to desktop for processing: ${title}`);
+      try {
+        return await processingProxyService.processDocument(item, options);
+      } catch (error) {
+        console.error('[Reader] Desktop processing failed, falling back to local:', error.message);
+        // Continue to local processing
+      }
+    }
+
+    console.log(`[Reader] Processing locally: ${title}`);
 
     // Route to appropriate reader based on mode
     const mode = readerMode || options.readerMode || 'vanilla';

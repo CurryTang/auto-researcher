@@ -26,6 +26,7 @@ let selectedFile = null;
 let allTags = [];
 let selectedTags = [];
 let currentArxivInfo = null; // Keep for backward compatibility
+let currentOpenReviewInfo = null;
 
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
@@ -82,6 +83,16 @@ function getDefaultPresets() {
       enabled: true,
     },
     {
+      id: 'openreview',
+      name: 'OpenReview',
+      icon: '📋',
+      color: '#3c6e71',
+      type: 'paper',
+      patterns: ['openreview.net/forum?id=*', 'openreview.net/pdf?id=*'],
+      endpoint: '/upload/openreview',
+      enabled: true,
+    },
+    {
       id: 'ieee',
       name: 'IEEE Xplore',
       icon: '🔬',
@@ -132,6 +143,8 @@ async function checkForPresets() {
           // Special handling for arXiv (has dedicated endpoint)
           if (preset.id === 'arxiv') {
             await handleArxivPreset(tab);
+          } else if (preset.id === 'openreview') {
+            await handleOpenReviewPreset(tab);
           } else {
             // Generic preset handling
             showPresetBanner(preset);
@@ -161,6 +174,30 @@ async function handleArxivPreset(tab) {
     if (arxivId) {
       currentArxivInfo = { isArxiv: true, arxivId, pdfUrl: `https://arxiv.org/pdf/${arxivId}.pdf` };
       fetchArxivMetadata(arxivId);
+    }
+  }
+}
+
+// Handle OpenReview preset specifically
+async function handleOpenReviewPreset(tab) {
+  // Try to get OpenReview info from content script
+  try {
+    const openReviewInfo = await chrome.tabs.sendMessage(tab.id, { action: 'getOpenReviewInfo' });
+    if (openReviewInfo && openReviewInfo.isOpenReview) {
+      currentOpenReviewInfo = openReviewInfo;
+      showOpenReviewMode(openReviewInfo);
+    }
+  } catch (e) {
+    // Content script not available, try to parse URL directly
+    const paperId = parseOpenReviewUrlFromPopup(tab.url);
+    if (paperId) {
+      currentOpenReviewInfo = {
+        isOpenReview: true,
+        paperId,
+        pdfUrl: `https://openreview.net/pdf?id=${paperId}`,
+        forumUrl: `https://openreview.net/forum?id=${paperId}`
+      };
+      showOpenReviewMode(currentOpenReviewInfo);
     }
   }
 }
@@ -248,6 +285,17 @@ function parseArxivUrlFromPopup(url) {
   return null;
 }
 
+// Parse OpenReview URL to get paper ID
+function parseOpenReviewUrlFromPopup(url) {
+  const pdfMatch = url.match(/openreview\.net\/pdf\?id=([^&#]+)/i);
+  if (pdfMatch) return pdfMatch[1];
+
+  const forumMatch = url.match(/openreview\.net\/forum\?id=([^&#]+)/i);
+  if (forumMatch) return forumMatch[1];
+
+  return null;
+}
+
 // Fetch arXiv metadata from backend
 async function fetchArxivMetadata(arxivId) {
   try {
@@ -321,6 +369,63 @@ function showArxivBanner(arxivInfo) {
   document.getElementById('saveArxivPdf').addEventListener('click', saveArxivPaper);
 }
 
+// Show OpenReview-specific UI
+function showOpenReviewMode(openReviewInfo) {
+  // Update title
+  if (openReviewInfo.title) {
+    titleInput.value = openReviewInfo.title;
+  }
+
+  // Set type to paper
+  typeSelect.value = 'paper';
+
+  // Add authors and abstract to notes
+  let notesContent = '';
+  if (openReviewInfo.authors && openReviewInfo.authors.length > 0) {
+    notesContent = `Authors: ${openReviewInfo.authors.join(', ')}`;
+  }
+  if (openReviewInfo.venue) {
+    notesContent += `\n\nVenue: ${openReviewInfo.venue}`;
+  }
+  if (openReviewInfo.abstract) {
+    notesContent += `\n\nAbstract: ${openReviewInfo.abstract}`;
+  }
+  if (notesContent) {
+    notesInput.value = notesContent;
+  }
+
+  // Show OpenReview banner and button
+  showOpenReviewBanner(openReviewInfo);
+}
+
+// Show OpenReview detection banner
+function showOpenReviewBanner(openReviewInfo) {
+  // Check if banner already exists
+  if (document.getElementById('openreviewBanner')) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'openreviewBanner';
+  banner.className = 'arxiv-banner'; // Reuse arXiv banner style
+  banner.style.background = 'linear-gradient(135deg, #3c6e71 0%, #2d5457 100%)';
+  banner.innerHTML = `
+    <div class="arxiv-badge">
+      <span class="arxiv-icon">📋</span>
+      <span>OpenReview Paper Detected</span>
+    </div>
+    <div class="arxiv-id">ID: ${openReviewInfo.paperId}</div>
+    <button type="button" id="saveOpenReviewPdf" class="btn btn-arxiv">
+      Save OpenReview PDF
+    </button>
+  `;
+
+  // Insert after header
+  const header = document.querySelector('header');
+  header.after(banner);
+
+  // Add click handler for OpenReview save button
+  document.getElementById('saveOpenReviewPdf').addEventListener('click', saveOpenReviewPaper);
+}
+
 // Save arXiv paper (fetch PDF and upload)
 async function saveArxivPaper() {
   if (!currentArxivInfo || !currentArxivInfo.arxivId) {
@@ -354,6 +459,45 @@ async function saveArxivPaper() {
   } catch (error) {
     console.error('arXiv save error:', error);
     showStatus(error.message || 'Failed to save arXiv paper', 'error');
+  } finally {
+    setLoading(false);
+  }
+}
+
+// Save OpenReview paper (fetch PDF and upload)
+async function saveOpenReviewPaper() {
+  if (!currentOpenReviewInfo || !currentOpenReviewInfo.paperId) {
+    showStatus('No OpenReview paper detected', 'error');
+    return;
+  }
+
+  const data = getFormData();
+
+  setLoading(true, 'Fetching OpenReview PDF...');
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/upload/openreview`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        paperId: currentOpenReviewInfo.paperId,
+        pdfUrl: currentOpenReviewInfo.pdfUrl,
+        title: data.title || currentOpenReviewInfo.title || `OpenReview:${currentOpenReviewInfo.paperId}`,
+        tags: data.tags,
+        notes: data.notes,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to save OpenReview paper');
+    }
+
+    showStatus('OpenReview paper saved successfully!', 'success');
+    resetForm();
+  } catch (error) {
+    console.error('OpenReview save error:', error);
+    showStatus(error.message || 'Failed to save OpenReview paper', 'error');
   } finally {
     setLoading(false);
   }
@@ -605,6 +749,7 @@ function detectContentType(url) {
   const lowerUrl = url.toLowerCase();
 
   if (lowerUrl.includes('arxiv.org') ||
+      lowerUrl.includes('openreview.net') ||
       lowerUrl.includes('scholar.google') ||
       lowerUrl.includes('semanticscholar') ||
       lowerUrl.includes('doi.org') ||
@@ -636,6 +781,12 @@ saveAsPdfBtn.addEventListener('click', async () => {
   // If on arXiv page, use arXiv endpoint
   if (currentArxivInfo && currentArxivInfo.isArxiv && currentArxivInfo.arxivId) {
     await saveArxivPaper();
+    return;
+  }
+
+  // If on OpenReview page, use OpenReview endpoint
+  if (currentOpenReviewInfo && currentOpenReviewInfo.isOpenReview && currentOpenReviewInfo.paperId) {
+    await saveOpenReviewPaper();
     return;
   }
 
@@ -781,6 +932,12 @@ function setLoading(loading, message = 'Loading...') {
   const arxivBtn = document.getElementById('saveArxivPdf');
   if (arxivBtn) {
     arxivBtn.disabled = loading;
+  }
+
+  // Also disable OpenReview button if it exists
+  const openReviewBtn = document.getElementById('saveOpenReviewPdf');
+  if (openReviewBtn) {
+    openReviewBtn.disabled = loading;
   }
 
   if (loading) {
