@@ -75,6 +75,13 @@ module.exports = {
   // Gemini CLI Configuration
   geminiCli: {
     path: process.env.GEMINI_CLI_PATH || 'gemini',
+    model: process.env.GEMINI_CLI_MODEL || 'gemini-3-flash-preview',
+  },
+
+  // Google API Configuration (Google Developer Platform)
+  googleApi: {
+    apiKey: process.env.GOOGLE_API_KEY,
+    model: process.env.GOOGLE_API_MODEL || 'gemini-3-flash-preview',
   },
 
   // Claude Code CLI Configuration
