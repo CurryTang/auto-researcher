@@ -2,11 +2,55 @@ const { getDb } = require('../db');
 const config = require('../config');
 const pdfService = require('./pdf.service');
 const geminiCliService = require('./gemini-cli.service');
+const googleApiService = require('./google-api.service');
 const mathpixService = require('./mathpix.service');
 const llmService = require('./llm.service');
 const s3Service = require('./s3.service');
 const autoReaderService = require('./auto-reader.service');
 const processingProxyService = require('./processing-proxy.service');
+
+/**
+ * Available analysis providers
+ */
+const PROVIDERS = {
+  'gemini-cli': {
+    name: 'Gemini CLI',
+    description: 'Google Gemini CLI (local installation required)',
+    isAvailable: () => geminiCliService.isAvailable(),
+    readDocument: (filePath, prompt, options) => geminiCliService.readDocument(filePath, prompt, options),
+    readMarkdown: (content, prompt, options) => geminiCliService.readMarkdown(content, prompt, options),
+    analyzeRepository: (repoDir, prompt, options) => geminiCliService.analyzeRepository(repoDir, prompt, options),
+  },
+  'google-api': {
+    name: 'Google API',
+    description: 'Google Generative AI API (gemini-2.0-flash)',
+    isAvailable: () => googleApiService.isAvailable(),
+    readDocument: (filePath, prompt, options) => googleApiService.readDocument(filePath, prompt, options),
+    readMarkdown: (content, prompt, options) => googleApiService.readMarkdown(content, prompt, options),
+    analyzeRepository: (repoDir, prompt, options) => googleApiService.analyzeRepository(repoDir, prompt, options),
+  },
+  'claude-code': {
+    name: 'Claude Code',
+    description: 'Claude Code CLI in headless mode',
+    isAvailable: async () => {
+      // Claude Code is available if ANTHROPIC_API_KEY is set
+      return !!config.claudeCli?.apiKey;
+    },
+    readDocument: async (filePath, prompt, options) => {
+      // For Claude Code, we need to convert PDF to text first or use Mathpix
+      throw new Error('Claude Code direct PDF reading not supported. Use Mathpix conversion.');
+    },
+    readMarkdown: async (content, prompt, options) => {
+      // Use Anthropic API directly for markdown
+      return llmService.generateCompletion(content, prompt, 'anthropic');
+    },
+    analyzeRepository: async (repoDir, prompt, options) => {
+      // For code analysis, Claude Code could use its native capabilities
+      // For now, fall back to Anthropic API
+      return llmService.generateCompletion('', prompt, 'anthropic');
+    },
+  },
+};
 
 /**
  * Default prompt template for paper summary
@@ -93,15 +137,19 @@ class ReaderService {
       // Step 2: Get prompt template
       const prompt = await this.getPromptTemplate(options.promptTemplateId);
 
-      // Step 3: Read the document
+      // Step 3: Read the document using the specified provider
       let result;
+      const providerOptions = {
+        ...options,
+        provider: item.analysisProvider || options.provider || config.reader?.defaultProvider,
+      };
 
       if (pdfInfo.needsMathpix) {
         // Large PDF: Convert with Mathpix first
-        result = await this.readWithMathpix(pdfInfo.buffer, prompt);
+        result = await this.readWithMathpix(pdfInfo.buffer, prompt, providerOptions);
       } else {
         // Normal PDF: Direct AI reading
-        result = await this.readWithAI(pdfInfo.filePath, prompt, options);
+        result = await this.readWithAI(pdfInfo.filePath, prompt, providerOptions);
       }
 
       console.log(`[Reader] AI reading complete, output length: ${result.text.length} chars`);
@@ -127,46 +175,94 @@ class ReaderService {
   }
 
   /**
-   * Read a document using Gemini CLI (primary method)
+   * Get list of available providers
+   * @returns {Promise<Array<{id: string, name: string, description: string, available: boolean}>>}
+   */
+  async getAvailableProviders() {
+    const providerList = [];
+    
+    for (const [id, provider] of Object.entries(PROVIDERS)) {
+      const available = await provider.isAvailable();
+      providerList.push({
+        id,
+        name: provider.name,
+        description: provider.description,
+        available,
+      });
+    }
+    
+    return providerList;
+  }
+
+  /**
+   * Read a document using the specified provider
    * @param {string} filePath - Path to PDF file
    * @param {string} prompt - The prompt to use
-   * @param {object} options - Additional options
-   * @returns {Promise<{text: string}>}
+   * @param {object} options - Additional options including provider selection
+   * @returns {Promise<{text: string, provider?: string, model?: string}>}
    */
   async readWithAI(filePath, prompt, options = {}) {
-    const provider = options.provider || config.reader?.defaultProvider || 'gemini-cli';
+    const requestedProvider = options.provider || config.reader?.defaultProvider || 'gemini-cli';
+    
+    console.log(`[Reader] Requested provider: ${requestedProvider}`);
 
-    if (provider === 'gemini-cli') {
-      // Try Gemini CLI first
-      const cliAvailable = await geminiCliService.isAvailable();
-
-      if (cliAvailable) {
-        console.log('[Reader] Using Gemini CLI');
-        return await geminiCliService.readDocument(filePath, prompt);
+    // Try the requested provider first
+    if (PROVIDERS[requestedProvider]) {
+      const provider = PROVIDERS[requestedProvider];
+      const available = await provider.isAvailable();
+      
+      if (available) {
+        console.log(`[Reader] Using ${provider.name}`);
+        try {
+          return await provider.readDocument(filePath, prompt, options);
+        } catch (error) {
+          console.error(`[Reader] ${provider.name} failed:`, error.message);
+          // Continue to fallback
+        }
       } else {
-        console.log('[Reader] Gemini CLI not available, falling back to API');
+        console.log(`[Reader] ${provider.name} not available`);
       }
     }
 
-    // Fallback to LLM API
+    // Fallback order: gemini-cli -> google-api -> claude-code
+    const fallbackOrder = ['gemini-cli', 'google-api', 'claude-code'];
+    
+    for (const providerId of fallbackOrder) {
+      if (providerId === requestedProvider) continue; // Already tried
+      
+      const provider = PROVIDERS[providerId];
+      if (!provider) continue;
+      
+      const available = await provider.isAvailable();
+      if (!available) continue;
+      
+      console.log(`[Reader] Falling back to ${provider.name}`);
+      try {
+        return await provider.readDocument(filePath, prompt, options);
+      } catch (error) {
+        console.error(`[Reader] ${provider.name} fallback failed:`, error.message);
+        // Continue to next fallback
+      }
+    }
+
+    // Final fallback to LLM API
     const configuredProviders = llmService.getConfiguredProviders();
 
     if (configuredProviders.length === 0) {
-      throw new Error('No AI providers available. Install Gemini CLI or configure an LLM API key.');
+      throw new Error('No AI providers available. Configure one of: Gemini CLI, Google API key, or Anthropic API key.');
     }
 
-    // For API fallback, we need to extract text from PDF first
-    // This is a simplified approach - in production, you might use pdf-parse or similar
-    throw new Error('API fallback for direct PDF reading not yet implemented. Please install Gemini CLI or use Mathpix for large PDFs.');
+    throw new Error('All document reading providers failed. Please check your configuration.');
   }
 
   /**
    * Read a document using Mathpix conversion + AI
    * @param {Buffer} pdfBuffer - PDF buffer
    * @param {string} prompt - The prompt to use
-   * @returns {Promise<{text: string}>}
+   * @param {object} options - Additional options including provider selection
+   * @returns {Promise<{text: string, provider?: string, model?: string}>}
    */
-  async readWithMathpix(pdfBuffer, prompt) {
+  async readWithMathpix(pdfBuffer, prompt, options = {}) {
     if (!mathpixService.isConfigured()) {
       throw new Error('Mathpix is not configured. Cannot process large PDFs without Mathpix API keys.');
     }
@@ -178,15 +274,44 @@ class ReaderService {
 
     console.log(`[Reader] Mathpix conversion complete, markdown length: ${markdown.length} chars`);
 
-    // Check if Gemini CLI is available for markdown processing
-    const cliAvailable = await geminiCliService.isAvailable();
-
-    if (cliAvailable) {
-      console.log('[Reader] Using Gemini CLI for markdown processing');
-      return await geminiCliService.readMarkdown(markdown, prompt);
+    const requestedProvider = options.provider || config.reader?.defaultProvider || 'gemini-cli';
+    
+    // Try the requested provider first for markdown processing
+    if (PROVIDERS[requestedProvider]) {
+      const provider = PROVIDERS[requestedProvider];
+      const available = await provider.isAvailable();
+      
+      if (available && provider.readMarkdown) {
+        console.log(`[Reader] Using ${provider.name} for markdown processing`);
+        try {
+          return await provider.readMarkdown(markdown, prompt, options);
+        } catch (error) {
+          console.error(`[Reader] ${provider.name} markdown processing failed:`, error.message);
+        }
+      }
     }
 
-    // Fallback to LLM API
+    // Fallback order for markdown processing
+    const fallbackOrder = ['gemini-cli', 'google-api', 'claude-code'];
+    
+    for (const providerId of fallbackOrder) {
+      if (providerId === requestedProvider) continue;
+      
+      const provider = PROVIDERS[providerId];
+      if (!provider || !provider.readMarkdown) continue;
+      
+      const available = await provider.isAvailable();
+      if (!available) continue;
+      
+      console.log(`[Reader] Falling back to ${provider.name} for markdown`);
+      try {
+        return await provider.readMarkdown(markdown, prompt, options);
+      } catch (error) {
+        console.error(`[Reader] ${provider.name} markdown fallback failed:`, error.message);
+      }
+    }
+
+    // Final fallback to generic LLM API
     console.log('[Reader] Using LLM API for markdown processing');
     return await llmService.generateWithFallback(markdown, prompt);
   }

@@ -85,6 +85,9 @@ const DEFAULT_PRESETS = [
 
 // DOM Elements
 const apiUrlInput = document.getElementById('apiUrl');
+const defaultProviderSelect = document.getElementById('defaultProvider');
+const providerDescription = document.getElementById('providerDescription');
+const providerStatusEl = document.getElementById('providerStatus');
 const presetsListEl = document.getElementById('presetsList');
 const addPresetBtn = document.getElementById('addPresetBtn');
 const resetPresetsBtn = document.getElementById('resetPresetsBtn');
@@ -116,11 +119,12 @@ let editingPresetId = null;
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSettings();
   setupEventListeners();
+  await loadProviderStatus();
 });
 
 // Load settings from storage
 async function loadSettings() {
-  const result = await chrome.storage.local.get(['apiBaseUrl', 'presets']);
+  const result = await chrome.storage.local.get(['apiBaseUrl', 'presets', 'defaultProvider']);
 
   // Load API URL - migrate from localhost if needed
   let apiUrl = result.apiBaseUrl || 'http://138.68.5.132:3000/api';
@@ -130,6 +134,12 @@ async function loadSettings() {
     await chrome.storage.local.set({ apiBaseUrl: apiUrl });
   }
   apiUrlInput.value = apiUrl;
+
+  // Load default provider
+  if (result.defaultProvider && defaultProviderSelect) {
+    defaultProviderSelect.value = result.defaultProvider;
+    updateProviderDescription(result.defaultProvider);
+  }
 
   // Load presets (use defaults if none saved)
   if (result.presets && result.presets.length > 0) {
@@ -141,11 +151,67 @@ async function loadSettings() {
   renderPresets();
 }
 
+// Load provider status from API
+async function loadProviderStatus() {
+  if (!providerStatusEl) return;
+
+  try {
+    const apiUrl = apiUrlInput.value.trim();
+    const response = await fetch(`${apiUrl}/reader/providers`);
+    
+    if (response.ok) {
+      const data = await response.json();
+      renderProviderStatus(data.providers);
+    } else {
+      providerStatusEl.innerHTML = '<p class="hint error">Failed to load provider status</p>';
+    }
+  } catch (error) {
+    console.error('Failed to load provider status:', error);
+    providerStatusEl.innerHTML = '<p class="hint error">Cannot connect to backend</p>';
+  }
+}
+
+// Render provider availability status
+function renderProviderStatus(providers) {
+  if (!providerStatusEl || !providers) return;
+
+  const statusHtml = providers.map(provider => {
+    const statusIcon = provider.available ? '✅' : '❌';
+    const statusText = provider.available ? 'Available' : 'Not configured';
+    return `
+      <div class="provider-item ${provider.available ? 'available' : 'unavailable'}">
+        <span class="provider-icon">${statusIcon}</span>
+        <span class="provider-name">${provider.name}</span>
+        <span class="provider-status-text">${statusText}</span>
+      </div>
+    `;
+  }).join('');
+
+  providerStatusEl.innerHTML = `
+    <p class="hint">Provider availability:</p>
+    <div class="provider-list">${statusHtml}</div>
+  `;
+}
+
+// Update provider description based on selection
+function updateProviderDescription(providerId) {
+  if (!providerDescription) return;
+
+  const descriptions = {
+    'gemini-cli': 'Uses local Gemini CLI installation (requires gemini command)',
+    'google-api': 'Uses Google Generative AI API (requires GOOGLE_API_KEY)',
+    'claude-code': 'Uses Claude Code in headless mode (requires ANTHROPIC_API_KEY)',
+  };
+
+  providerDescription.textContent = descriptions[providerId] || 'Provider for AI paper analysis';
+}
+
 // Save settings to storage
 async function saveSettings() {
   await chrome.storage.local.set({
     apiBaseUrl: apiUrlInput.value.trim(),
     presets: presets,
+    defaultProvider: defaultProviderSelect ? defaultProviderSelect.value : 'gemini-cli',
   });
   showToast('Settings saved!', 'success');
 }
@@ -159,6 +225,13 @@ function setupEventListeners() {
   backBtn.addEventListener('click', () => {
     window.close();
   });
+
+  // Provider selection change
+  if (defaultProviderSelect) {
+    defaultProviderSelect.addEventListener('change', () => {
+      updateProviderDescription(defaultProviderSelect.value);
+    });
+  }
 
   // Add preset button
   addPresetBtn.addEventListener('click', () => {

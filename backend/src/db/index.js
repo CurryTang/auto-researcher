@@ -66,6 +66,8 @@ async function initDatabase() {
     { name: 'code_notes_s3_key', definition: 'TEXT' },
     { name: 'has_code', definition: 'INTEGER DEFAULT 0' },
     { name: 'code_url', definition: 'TEXT' },
+    // Analysis provider column (gemini-cli, google-api, claude-code)
+    { name: 'analysis_provider', definition: "TEXT DEFAULT 'gemini-cli'" },
   ];
 
   for (const col of processingColumns) {

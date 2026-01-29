@@ -35,6 +35,23 @@ router.get('/modes', (req, res) => {
 });
 
 /**
+ * GET /api/reader/providers
+ * Get available analysis providers
+ */
+router.get('/providers', async (req, res) => {
+  try {
+    const providers = await readerService.getAvailableProviders();
+    res.json({
+      providers,
+      defaultProvider: 'gemini-cli',
+    });
+  } catch (error) {
+    console.error('Error getting providers:', error);
+    res.status(500).json({ error: 'Failed to get providers' });
+  }
+});
+
+/**
  * GET /api/reader/queue/status
  * Get the current queue status and rate limit info
  */

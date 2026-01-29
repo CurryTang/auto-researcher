@@ -60,7 +60,7 @@ router.post('/direct', requireAuth, upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    const { title, type, tags, notes } = req.body;
+    const { title, type, tags, notes, analysisProvider } = req.body;
     const userId = req.body.userId || 'default_user';
 
     // Generate S3 key and upload
@@ -82,6 +82,7 @@ router.post('/direct', requireAuth, upload.single('file'), async (req, res) => {
       tags: tags ? JSON.parse(tags) : [],
       notes,
       userId,
+      analysisProvider: analysisProvider || 'gemini-cli',
     });
 
     res.status(201).json(document);
@@ -94,7 +95,7 @@ router.post('/direct', requireAuth, upload.single('file'), async (req, res) => {
 // POST /api/upload/webpage - Convert webpage to PDF and save (requires auth)
 router.post('/webpage', requireAuth, async (req, res) => {
   try {
-    const { url, title, type, tags, notes } = req.body;
+    const { url, title, type, tags, notes, analysisProvider } = req.body;
 
     if (!url) {
       return res.status(400).json({ error: 'URL is required' });
@@ -124,6 +125,7 @@ router.post('/webpage', requireAuth, async (req, res) => {
       tags: tags || [],
       notes,
       userId,
+      analysisProvider: analysisProvider || 'gemini-cli',
     });
 
     res.status(201).json(document);
@@ -136,7 +138,7 @@ router.post('/webpage', requireAuth, async (req, res) => {
 // POST /api/upload/arxiv - Fetch arXiv paper PDF and save (requires auth)
 router.post('/arxiv', requireAuth, async (req, res) => {
   try {
-    const { url, paperId, title, tags, notes } = req.body;
+    const { url, paperId, title, tags, notes, analysisProvider } = req.body;
 
     // Get paper ID from URL or directly
     let arxivId = paperId;
@@ -193,6 +195,7 @@ router.post('/arxiv', requireAuth, async (req, res) => {
       tags: tags || [],
       notes: fullNotes,
       userId,
+      analysisProvider: analysisProvider || 'gemini-cli',
     });
 
     // Update document with code URL if found
@@ -240,7 +243,7 @@ router.get('/arxiv/metadata', async (req, res) => {
 // POST /api/upload/openreview - Fetch OpenReview paper PDF and save (requires auth)
 router.post('/openreview', requireAuth, async (req, res) => {
   try {
-    const { paperId, pdfUrl, title, tags, notes } = req.body;
+    const { paperId, pdfUrl, title, tags, notes, analysisProvider } = req.body;
 
     if (!paperId && !pdfUrl) {
       return res.status(400).json({ error: 'Paper ID or PDF URL is required' });
@@ -298,6 +301,7 @@ router.post('/openreview', requireAuth, async (req, res) => {
       tags: tags || [],
       notes: fullNotes,
       userId,
+      analysisProvider: analysisProvider || 'gemini-cli',
     });
 
     res.status(201).json(document);

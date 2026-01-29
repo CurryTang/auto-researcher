@@ -66,7 +66,7 @@ class QueueService {
     const result = await db.execute(`
       SELECT pq.id, pq.document_id, pq.retry_count, pq.max_retries,
              d.title, d.s3_key, d.file_size, d.mime_type,
-             d.reader_mode, d.code_url, d.has_code
+             d.reader_mode, d.code_url, d.has_code, d.analysis_provider
       FROM processing_queue pq
       JOIN documents d ON pq.document_id = d.id
       WHERE d.processing_status = 'queued'
@@ -105,6 +105,7 @@ class QueueService {
       readerMode: item.reader_mode || 'vanilla',
       codeUrl: item.code_url,
       hasCode: item.has_code === 1,
+      analysisProvider: item.analysis_provider || 'gemini-cli',
     };
   }
 

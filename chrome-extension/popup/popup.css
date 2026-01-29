@@ -73,6 +73,12 @@ header h1 {
   min-height: 60px;
 }
 
+.form-group .hint {
+  font-size: 11px;
+  color: #888;
+  margin-top: 4px;
+}
+
 .button-group {
   display: flex;
   gap: 8px;

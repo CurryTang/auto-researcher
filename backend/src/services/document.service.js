@@ -36,6 +36,8 @@ function rowToDocument(row) {
     codeUrl: row.code_url,
     // Code analysis status
     codeAnalysisStatus: row.code_analysis_status,
+    // Analysis provider (gemini-cli, google-api, claude-code)
+    analysisProvider: row.analysis_provider || 'gemini-cli',
   };
 }
 
@@ -49,8 +51,8 @@ async function createDocument(data) {
   const tags = JSON.stringify(data.tags || []);
 
   const result = await db.execute({
-    sql: `INSERT INTO documents (title, type, original_url, s3_key, s3_url, file_size, mime_type, tags, notes, user_id, reader_mode)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO documents (title, type, original_url, s3_key, s3_url, file_size, mime_type, tags, notes, user_id, reader_mode, analysis_provider)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       data.title,
       data.type || 'other',
@@ -63,6 +65,7 @@ async function createDocument(data) {
       data.notes || null,
       data.userId || 'default_user',
       data.readerMode || 'auto_reader',  // Default to auto_reader mode
+      data.analysisProvider || 'gemini-cli',  // Default to gemini-cli
     ],
   });
 
@@ -153,7 +156,7 @@ async function getDocumentById(id) {
  */
 async function updateDocument(id, data) {
   const db = getDb();
-  const allowedUpdates = ['title', 'type', 'tags', 'notes', 'reader_mode', 'code_url', 'has_code'];
+  const allowedUpdates = ['title', 'type', 'tags', 'notes', 'reader_mode', 'code_url', 'has_code', 'analysis_provider'];
   const updates = [];
   const args = [];
 
@@ -162,6 +165,7 @@ async function updateDocument(id, data) {
     readerMode: 'reader_mode',
     codeUrl: 'code_url',
     hasCode: 'has_code',
+    analysisProvider: 'analysis_provider',
   };
 
   for (const key of Object.keys(data)) {

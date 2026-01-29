@@ -35,6 +35,16 @@
       </div>
 
       <div class="form-group">
+        <label for="analysisProvider">Analysis Provider</label>
+        <select id="analysisProvider" name="analysisProvider">
+          <option value="gemini-cli">Gemini CLI (Local)</option>
+          <option value="google-api">Google API (Cloud)</option>
+          <option value="claude-code">Claude Code (Headless)</option>
+        </select>
+        <p class="hint" id="providerHint">Provider for AI paper analysis</p>
+      </div>
+
+      <div class="form-group">
         <label>Tags</label>
         <div class="tags-container">
           <div class="selected-tags" id="selectedTags"></div>

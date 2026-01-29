@@ -7,6 +7,8 @@ let currentPreset = null; // Currently detected preset
 const titleInput = document.getElementById('title');
 const urlInput = document.getElementById('url');
 const typeSelect = document.getElementById('type');
+const analysisProviderSelect = document.getElementById('analysisProvider');
+const providerHint = document.getElementById('providerHint');
 const notesInput = document.getElementById('notes');
 const fileInput = document.getElementById('fileInput');
 const fileNameDisplay = document.getElementById('fileName');
@@ -37,15 +39,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadCurrentTabInfo(),
     loadTags(),
     checkForPresets(), // Check all presets, not just arXiv
+    loadProviders(), // Load available analysis providers
   ]);
   setupTagListeners();
   setupFileListeners();
+  setupProviderListener();
 });
 
 // Load stored settings (API URL and presets)
 async function loadStoredSettings() {
   try {
-    const result = await chrome.storage.local.get(['apiBaseUrl', 'presets']);
+    const result = await chrome.storage.local.get(['apiBaseUrl', 'presets', 'defaultProvider']);
 
     if (result.apiBaseUrl) {
       // Migrate from localhost to production URL
@@ -64,9 +68,82 @@ async function loadStoredSettings() {
       // Use default presets
       storedPresets = getDefaultPresets();
     }
+
+    // Set default provider if stored
+    if (result.defaultProvider && analysisProviderSelect) {
+      analysisProviderSelect.value = result.defaultProvider;
+    }
   } catch (error) {
     console.error('Failed to load settings:', error);
   }
+}
+
+// Load available analysis providers from API
+async function loadProviders() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/reader/providers`);
+    if (response.ok) {
+      const data = await response.json();
+      updateProviderOptions(data.providers);
+    }
+  } catch (error) {
+    console.error('Failed to load providers:', error);
+    // Keep default options if API is unavailable
+  }
+}
+
+// Update provider dropdown with available options
+function updateProviderOptions(providers) {
+  if (!analysisProviderSelect || !providers) return;
+
+  // Get currently selected value
+  const currentValue = analysisProviderSelect.value;
+
+  // Clear and rebuild options
+  analysisProviderSelect.innerHTML = '';
+
+  providers.forEach(provider => {
+    const option = document.createElement('option');
+    option.value = provider.id;
+    option.textContent = `${provider.name}${provider.available ? '' : ' (unavailable)'}`;
+    option.disabled = !provider.available;
+    analysisProviderSelect.appendChild(option);
+  });
+
+  // Restore selection if still available
+  if (currentValue) {
+    const option = analysisProviderSelect.querySelector(`option[value="${currentValue}"]`);
+    if (option && !option.disabled) {
+      analysisProviderSelect.value = currentValue;
+    }
+  }
+}
+
+// Setup provider selection listener
+function setupProviderListener() {
+  if (!analysisProviderSelect) return;
+
+  analysisProviderSelect.addEventListener('change', async () => {
+    const provider = analysisProviderSelect.value;
+    
+    // Update hint text based on provider
+    const hints = {
+      'gemini-cli': 'Uses local Gemini CLI installation',
+      'google-api': 'Uses Google Generative AI API (cloud)',
+      'claude-code': 'Uses Claude Code in headless mode',
+    };
+    
+    if (providerHint) {
+      providerHint.textContent = hints[provider] || 'Provider for AI paper analysis';
+    }
+
+    // Save as default for future uploads
+    try {
+      await chrome.storage.local.set({ defaultProvider: provider });
+    } catch (error) {
+      console.error('Failed to save default provider:', error);
+    }
+  });
 }
 
 // Default presets (same as in settings.js)
@@ -446,6 +523,7 @@ async function saveArxivPaper() {
         title: data.title || currentArxivInfo.title,
         tags: data.tags,
         notes: data.notes,
+        analysisProvider: data.analysisProvider,
       }),
     });
 
@@ -485,6 +563,7 @@ async function saveOpenReviewPaper() {
         title: data.title || currentOpenReviewInfo.title || `OpenReview:${currentOpenReviewInfo.paperId}`,
         tags: data.tags,
         notes: data.notes,
+        analysisProvider: data.analysisProvider,
       }),
     });
 
@@ -805,6 +884,7 @@ saveAsPdfBtn.addEventListener('click', async () => {
         type: data.type,
         tags: data.tags,
         notes: data.notes,
+        analysisProvider: data.analysisProvider,
       }),
     });
 
@@ -841,6 +921,7 @@ async function uploadFile(data) {
     formData.append('type', data.type);
     formData.append('tags', JSON.stringify(data.tags));
     formData.append('notes', data.notes || '');
+    formData.append('analysisProvider', data.analysisProvider || 'gemini-cli');
 
     const response = await fetch(`${API_BASE_URL}/upload/direct`, {
       method: 'POST',
@@ -871,6 +952,7 @@ function getFormData() {
     type: typeSelect.value,
     tags: selectedTags.map(t => t.name),
     notes: notesInput.value.trim(),
+    analysisProvider: analysisProviderSelect ? analysisProviderSelect.value : 'gemini-cli',
   };
 }
 
