@@ -153,6 +153,21 @@ Quick deploy using the included script:
 
 See [Deployment Guide](docs/DEPLOYMENT.md) for detailed instructions.
 
+## Updates
+
+### Recommended Deployment Architecture
+
+Our DigitalOcean server is a low-cost instance ($8/month), which cannot handle multi-user scenarios well. The recommended deployment approach is to use the cloud server as a **lightweight proxy**, and then use [FRP](https://github.com/fatedier/frp) (Fast Reverse Proxy) to forward user requests to a local powerful PC for actual AI processing.
+
+```
+┌──────────┐     ┌─────────────────────┐     ┌──────────────────────┐
+│  Users   │────▶│  Cloud Server ($8)  │────▶│  Local Powerful PC   │
+│          │     │  (Proxy via FRP)     │     │  (AI Processing)     │
+└──────────┘     └─────────────────────┘     └──────────────────────┘
+```
+
+This way, the cloud server only handles routing and lightweight API requests, while all heavy AI workloads (Gemini CLI, Codex CLI, Claude Code) run on your local machine with better hardware.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
@@ -312,6 +327,21 @@ cd frontend && npm run dev
 ```
 
 详见[部署指南](docs/DEPLOYMENT_CN.md)。
+
+## 更新
+
+### 推荐部署架构
+
+我们的 DigitalOcean 服务器是低配实例（$8/月），无法很好地应对多用户场景。推荐的部署方式是将云服务器作为**轻量代理**，然后使用 [FRP](https://github.com/fatedier/frp)（快速反向代理）将用户请求转发到本地高性能 PC 进行实际的 AI 处理。
+
+```
+┌──────────┐     ┌─────────────────────┐     ┌──────────────────────┐
+│   用户    │────▶│  云服务器 ($8)       │────▶│  本地高性能 PC        │
+│          │     │  (FRP 代理)          │     │  (AI 处理)           │
+└──────────┘     └─────────────────────┘     └──────────────────────┘
+```
+
+这样，云服务器只处理路由和轻量 API 请求，而所有繁重的 AI 工作负载（Gemini CLI、Codex CLI、Claude Code）都在本地硬件更强的机器上运行。
 
 ## 贡献
 

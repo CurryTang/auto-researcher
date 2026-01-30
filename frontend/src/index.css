@@ -1097,6 +1097,15 @@ body {
   background: #f3f4f6;
 }
 
+/* Hide mermaid error elements injected into body */
+[id^="dmermaid-"],
+body > [data-mermaid-error],
+body > svg[id^="mermaid-"],
+body > .error-icon,
+body > #d[id*="mermaid"] {
+  display: none !important;
+}
+
 /* Mermaid diagram styles */
 .mermaid-diagram {
   margin: 16px 0;

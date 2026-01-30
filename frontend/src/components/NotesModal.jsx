@@ -82,16 +82,22 @@ function MermaidDiagram({ code }) {
   useEffect(() => {
     const renderDiagram = async () => {
       if (!code) return;
+      const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
       try {
-        const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
         const processedCode = preprocessMermaidCode(code);
-        const { svg } = await mermaid.render(id, processedCode);
+        // Render into a hidden container to prevent error SVGs appearing in the page
+        const tempContainer = document.createElement('div');
+        tempContainer.style.display = 'none';
+        document.body.appendChild(tempContainer);
+        const { svg } = await mermaid.render(id, processedCode, tempContainer);
+        tempContainer.remove();
         setSvg(svg);
         setError(null);
       } catch (err) {
         console.error('Mermaid render error:', err);
-        console.error('Original code:', code);
         setError(err.message);
+        // Clean up any error elements mermaid injected into the DOM
+        document.querySelectorAll(`#d${id}, [id^="dmermaid-"]`).forEach(el => el.remove());
       }
     };
     renderDiagram();
