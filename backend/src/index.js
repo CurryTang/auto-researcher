@@ -16,6 +16,9 @@ const aiEditService = require('./services/ai-edit.service');
 
 const app = express();
 
+// Trust proxy (nginx) so rate limiter reads X-Forwarded-For correctly
+app.set('trust proxy', 1);
+
 // CORS must be before helmet/rate-limiting so preflight OPTIONS gets proper headers
 app.use(
   cors({
