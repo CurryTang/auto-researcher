@@ -119,7 +119,7 @@ async function getDocuments(filters = {}, pagination = {}) {
 
   // Get documents
   const result = await db.execute({
-    sql: `SELECT * FROM documents WHERE ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+    sql: `SELECT id, title, type, original_url, s3_key, s3_url, file_size, mime_type, tags, SUBSTR(notes, 1, 300) as notes, user_id, created_at, updated_at, processing_status, notes_s3_key, page_count, processing_error, processing_started_at, processing_completed_at, is_read, reader_mode, code_notes_s3_key, has_code, code_url, code_analysis_status, analysis_provider FROM documents WHERE ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
     args: [...args, limit, offset],
   });
 
