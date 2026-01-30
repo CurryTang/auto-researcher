@@ -6,6 +6,15 @@ export default defineConfig({
   plugins: [react()],
   // For GitHub Pages deployment - update 'auto-researcher' to your repo name
   base: '/auto-researcher/',
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://auto-reader.duckdns.org',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
   build: {
     outDir: 'dist',
     rollupOptions: {

@@ -6,8 +6,8 @@ import UserNotesModal from './components/UserNotesModal';
 import LoginModal from './components/LoginModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-// API URL - use environment variable if available, otherwise production URL
-const API_URL = import.meta.env.VITE_API_URL || 'https://auto-reader.duckdns.org/api';
+// API URL - in dev, use vite proxy to avoid CORS/SSL issues; in prod, use direct URL
+const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : 'https://auto-reader.duckdns.org/api');
 
 function AppContent() {
   const [documents, setDocuments] = useState([]);
@@ -34,7 +34,6 @@ function AppContent() {
   // Fetch documents with pagination
   const fetchDocuments = async (reset = false) => {
     if (loading) return;
-
     setLoading(true);
     setError(null);
 
@@ -64,7 +63,6 @@ function AppContent() {
       }
 
       // Check if there are more documents to load
-      // If we got fewer docs than requested, we've reached the end
       setHasMore(newDocs.length === LIMIT);
     } catch (err) {
       console.error('Failed to fetch documents:', err);
