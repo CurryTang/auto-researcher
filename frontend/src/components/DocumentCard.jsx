@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-function DocumentCard({ document, onDownload, onViewNotes, onToggleRead, onTriggerCodeAnalysis, onDelete, isAuthenticated }) {
+function DocumentCard({ document, onDownload, onViewNotes, onViewUserNotes, onToggleRead, onTriggerCodeAnalysis, onDelete, isAuthenticated }) {
   const [downloading, setDownloading] = useState(false);
   const [togglingRead, setTogglingRead] = useState(false);
   const [triggeringAnalysis, setTriggeringAnalysis] = useState(false);
@@ -185,6 +185,9 @@ function DocumentCard({ document, onDownload, onViewNotes, onToggleRead, onTrigg
             {processingStatus === 'processing' ? '...' : 'Status'}
           </button>
         )}
+        <button className="action-btn notes-btn" onClick={() => onViewUserNotes(document)} title="My notes">
+          Notes
+        </button>
         {renderCodeButton()}
         <button className="action-btn pdf-btn" onClick={handleDownload} disabled={downloading}>
           {downloading ? '...' : 'PDF'}

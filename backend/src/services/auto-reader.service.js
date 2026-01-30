@@ -9,6 +9,7 @@ const s3Service = require('./s3.service');
 const { spawn } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
+const { cleanLLMResponse } = require('../utils/clean-llm-response');
 
 /**
  * Auto Reader Service - Multi-pass deep reading mode
@@ -368,14 +369,14 @@ class AutoReaderService {
       const currentNotes = await fs.readFile(notesFilePath, 'utf-8');
       const pass2Prompt = PAPER_PASS_2_PROMPT.replace('{previous_notes}', currentNotes);
       const pass2Result = await this.executePass(tempFilePath, pass2Prompt, notesFilePath, 2);
-      await this.appendToNotesFile(notesFilePath, '\n\n---\n\n## 第二轮笔记\n\n' + pass2Result.text);
+      await this.appendToNotesFile(notesFilePath, '\n\n---\n\n## 第二轮笔记\n\n' + cleanLLMResponse(pass2Result.text));
 
       // Step 4: Pass 3 - 深度理解
       console.log('[AutoReader] === 第三轮：深度理解 ===');
       const updatedNotes = await fs.readFile(notesFilePath, 'utf-8');
       const pass3Prompt = PAPER_PASS_3_PROMPT.replace('{previous_notes}', updatedNotes);
       const pass3Result = await this.executePass(tempFilePath, pass3Prompt, notesFilePath, 3);
-      await this.appendToNotesFile(notesFilePath, '\n\n' + pass3Result.text);
+      await this.appendToNotesFile(notesFilePath, '\n\n' + cleanLLMResponse(pass3Result.text));
 
       // Step 5: Generate final paper notes (Mermaid diagrams render natively in markdown)
       let finalNotes = await fs.readFile(notesFilePath, 'utf-8');
@@ -939,7 +940,7 @@ Input --> Module A --> Module B --> Output
         const result = provider.runWithPromptFile
           ? await provider.runWithPromptFile(promptPath, { timeout: 60000 })
           : await provider.readMarkdown(prompt, '', { timeout: 60000 });
-        return result.text;
+        return cleanLLMResponse(result.text);
       } finally {
         // Cleanup prompt file
         try {

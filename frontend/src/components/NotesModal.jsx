@@ -1,182 +1,23 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css';
-import mermaid from 'mermaid';
+import MarkdownContent, { parseFrontmatter, cleanNotesContent } from './shared/MarkdownRenderer';
+import MarkdownEditor from './MarkdownEditor';
 
-// Initialize mermaid with better unicode support
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'default',
-  securityLevel: 'loose',
-  flowchart: {
-    htmlLabels: true,
-    useMaxWidth: true,
-  },
-});
-
-// Pre-process mermaid code to fix common issues
-// NOTE: Be very conservative - only fix obvious issues, don't break valid syntax
-function preprocessMermaidCode(code) {
-  if (!code) return code;
-
-  // For subgraph with spaces but no bracket label: subgraph My Name -> subgraph "My Name"
-  // But NOT: subgraph name["label"] - that's already valid
-  code = code.replace(/^(\s*subgraph\s+)([^"'\[\n]+?)(\s*)$/gm, (match, prefix, name, suffix) => {
-    const trimmedName = name.trim();
-    // Skip if it's a simple identifier (no spaces/special chars)
-    if (/^\w+$/.test(trimmedName)) {
-      return match;
-    }
-    // Skip if already quoted
-    if ((trimmedName.startsWith('"') && trimmedName.endsWith('"')) ||
-        (trimmedName.startsWith("'") && trimmedName.endsWith("'"))) {
-      return match;
-    }
-    // Quote it
-    return `${prefix}"${trimmedName}"${suffix}`;
-  });
-
-  // Fix node labels in square brackets ONLY if not already quoted
-  // A[Label With Space] -> A["Label With Space"]
-  // Skip: A["already quoted"]
-  code = code.replace(/^(\s*)(\w+)\[([^\]"]+)\]/gm, (match, indent, nodeId, label) => {
-    // If label contains spaces or non-ASCII, quote it
-    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
-      return `${indent}${nodeId}["${label}"]`;
-    }
-    return match;
-  });
-
-  // Fix node labels in double parentheses at line start only
-  // A((Label)) -> A(("Label"))
-  code = code.replace(/^(\s*)(\w+)\(\(([^)"]+)\)\)/gm, (match, indent, nodeId, label) => {
-    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
-      return `${indent}${nodeId}(("${label}"))`;
-    }
-    return match;
-  });
-
-  // DO NOT transform single parentheses - too risky, breaks content inside quotes
-
-  // Fix edge labels: |Label| patterns - quote if has spaces/non-ASCII
-  // But skip if already quoted: |"label"|
-  code = code.replace(/\|([^|"]+)\|/g, (match, label) => {
-    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
-      return `|"${label}"|`;
-    }
-    return match;
-  });
-
-  return code;
-}
-
-// Mermaid diagram component
-function MermaidDiagram({ code }) {
-  const containerRef = useRef(null);
-  const [svg, setSvg] = useState('');
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    const renderDiagram = async () => {
-      if (!code) return;
-      const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
-      try {
-        const processedCode = preprocessMermaidCode(code);
-        // Render into a hidden container to prevent error SVGs appearing in the page
-        const tempContainer = document.createElement('div');
-        tempContainer.style.display = 'none';
-        document.body.appendChild(tempContainer);
-        const { svg } = await mermaid.render(id, processedCode, tempContainer);
-        tempContainer.remove();
-        setSvg(svg);
-        setError(null);
-      } catch (err) {
-        console.error('Mermaid render error:', err);
-        setError(err.message);
-        // Clean up any error elements mermaid injected into the DOM
-        document.querySelectorAll(`#d${id}, [id^="dmermaid-"]`).forEach(el => el.remove());
-      }
-    };
-    renderDiagram();
-  }, [code]);
-
-  if (error) {
-    // Fallback: show the raw code in a code block instead of error
-    return (
-      <div className="mermaid-fallback">
-        <details>
-          <summary>Diagram (click to view source)</summary>
-          <pre className="code-block language-mermaid"><code>{code}</code></pre>
-        </details>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      ref={containerRef}
-      className="mermaid-diagram"
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
-  );
-}
-
-// Parse YAML frontmatter from markdown content
-function parseFrontmatter(content) {
-  if (!content) return { metadata: null, content: '' };
-
-  const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n/;
-  const match = content.match(frontmatterRegex);
-
-  if (!match) return { metadata: null, content };
-
-  const frontmatter = match[1];
-  const markdownContent = content.slice(match[0].length);
-
-  // Parse simple YAML (key: value pairs)
-  const metadata = {};
-  frontmatter.split('\n').forEach(line => {
-    const colonIndex = line.indexOf(':');
-    if (colonIndex > 0) {
-      const key = line.slice(0, colonIndex).trim();
-      const value = line.slice(colonIndex + 1).trim();
-      metadata[key] = value;
-    }
-  });
-
-  return { metadata, content: markdownContent };
-}
-
-// Clean notes content - remove blockquotes with status info and raw output sections
-function cleanNotesContent(content) {
-  if (!content) return content;
-
-  // Remove blockquotes that contain status info (阅读状态, 论文链接, etc.)
-  content = content.replace(/^>\s*(阅读状态|论文链接|代码链接|最后更新).*$/gm, '');
-
-  // Remove <details> sections with 原始输出
-  content = content.replace(/<details>\s*<summary>原始输出<\/summary>[\s\S]*?<\/details>/g, '');
-
-  // Remove any remaining raw output sections
-  content = content.replace(/##\s*原始输出[\s\S]*?(?=\n##|\n---|\Z)/g, '');
-
-  // Clean up multiple consecutive empty lines
-  content = content.replace(/\n{4,}/g, '\n\n\n');
-
-  return content;
-}
-
-function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
+function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthenticated, getAuthHeaders }) {
   const [notes, setNotes] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState(initialTab); // 'paper' or 'code'
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  // Parse the paper notes content to separate frontmatter
+  // AI Edit state
+  const [showAiEdit, setShowAiEdit] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiEditStatus, setAiEditStatus] = useState(null); // null | 'submitting' | 'queued' | 'processing'
+  const aiPollRef = useRef(null);
+
   const parsedPaperNotes = useMemo(() => {
     if (!notes?.notesContent) return null;
     const parsed = parseFrontmatter(notes.notesContent);
@@ -184,7 +25,6 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
     return parsed;
   }, [notes?.notesContent]);
 
-  // Parse the code notes content to separate frontmatter
   const parsedCodeNotes = useMemo(() => {
     if (!notes?.codeNotesContent) return null;
     const parsed = parseFrontmatter(notes.codeNotesContent);
@@ -192,59 +32,68 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
     return parsed;
   }, [notes?.codeNotesContent]);
 
-  useEffect(() => {
-    const fetchNotes = async () => {
-      setLoading(true);
-      setError(null);
+  const fetchNotes = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-      try {
-        const response = await fetch(`${apiUrl}/documents/${document.id}/notes?inline=true`);
-        const data = await response.json();
+    try {
+      const response = await fetch(`${apiUrl}/documents/${document.id}/notes?inline=true`);
+      const data = await response.json();
 
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to fetch notes');
-        }
-
-        setNotes(data);
-        // Respect initialTab, but fallback if the requested tab has no content
-        if (initialTab === 'code' && data.hasCodeNotes) {
-          setActiveTab('code');
-        } else if (initialTab === 'paper' && data.hasNotes) {
-          setActiveTab('paper');
-        } else if (data.hasCodeNotes && !data.hasNotes) {
-          setActiveTab('code');
-        } else if (data.hasNotes) {
-          setActiveTab('paper');
-        }
-      } catch (err) {
-        console.error('Error fetching notes:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch notes');
       }
-    };
 
+      setNotes(data);
+      if (initialTab === 'code' && data.hasCodeNotes) {
+        setActiveTab('code');
+      } else if (initialTab === 'paper' && data.hasNotes) {
+        setActiveTab('paper');
+      } else if (data.hasCodeNotes && !data.hasNotes) {
+        setActiveTab('code');
+      } else if (data.hasNotes) {
+        setActiveTab('paper');
+      }
+    } catch (err) {
+      console.error('Error fetching notes:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [document.id, apiUrl, initialTab]);
+
+  useEffect(() => {
     fetchNotes();
-  }, [document.id, apiUrl]);
+  }, [fetchNotes]);
 
-  // Handle click outside to close
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (aiPollRef.current) clearInterval(aiPollRef.current);
+    };
+  }, []);
+
   const handleBackdropClick = (e) => {
     if (e.target.classList.contains('modal-backdrop')) {
       onClose();
     }
   };
 
-  // Handle escape key
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
-        onClose();
+        if (showAiEdit) {
+          setShowAiEdit(false);
+        } else if (isEditing) {
+          setIsEditing(false);
+        } else {
+          onClose();
+        }
       }
     };
-
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [onClose]);
+  }, [onClose, isEditing, showAiEdit]);
 
   const getReaderModeBadge = (mode) => {
     if (mode === 'auto_reader') {
@@ -253,30 +102,137 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
     return <span className="reader-mode-badge vanilla">Vanilla</span>;
   };
 
-  // Custom components for ReactMarkdown to handle mermaid and code blocks
-  const markdownComponents = {
-    code({ node, inline, className, children, ...props }) {
-      const match = /language-(\w+)/.exec(className || '');
-      const language = match ? match[1] : '';
+  // Check if the current tab has content to show edit buttons
+  const currentTabHasContent = notes && (
+    (activeTab === 'paper' && notes.hasNotes) ||
+    (activeTab === 'code' && notes.hasCodeNotes)
+  );
 
-      // Render mermaid diagrams
-      if (language === 'mermaid' && !inline) {
-        return <MermaidDiagram code={String(children).replace(/\n$/, '')} />;
-      }
-
-      // Regular code blocks
-      if (!inline && language) {
-        return (
-          <pre className={`code-block language-${language}`}>
-            <code {...props}>{children}</code>
-          </pre>
-        );
-      }
-
-      // Inline code
-      return <code className="inline-code" {...props}>{children}</code>;
-    },
+  const handleStartEdit = () => {
+    const currentContent = activeTab === 'paper'
+      ? notes?.notesContent || ''
+      : notes?.codeNotesContent || '';
+    setEditContent(currentContent);
+    setIsEditing(true);
   };
+
+  const handleSaveEdit = async () => {
+    if (!getAuthHeaders) return;
+    setSaving(true);
+    try {
+      const response = await fetch(`${apiUrl}/documents/${document.id}/notes/content`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          type: activeTab === 'paper' ? 'paper' : 'code',
+          content: editContent,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to save');
+      }
+
+      setNotes(prev => ({
+        ...prev,
+        ...(activeTab === 'paper'
+          ? { notesContent: editContent }
+          : { codeNotesContent: editContent }),
+      }));
+      setIsEditing(false);
+    } catch (err) {
+      console.error('Error saving notes:', err);
+      alert('Failed to save: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+  };
+
+  const handleTabSwitch = (tab) => {
+    setIsEditing(false);
+    setShowAiEdit(false);
+    setActiveTab(tab);
+  };
+
+  // AI Edit: submit prompt to queue
+  const handleAiEditSubmit = async () => {
+    if (!aiPrompt.trim() || !getAuthHeaders) return;
+    setAiEditStatus('submitting');
+
+    try {
+      const response = await fetch(`${apiUrl}/documents/${document.id}/notes/ai-edit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          type: activeTab === 'paper' ? 'paper' : 'code',
+          prompt: aiPrompt.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to submit AI edit');
+      }
+
+      setAiEditStatus('queued');
+      setAiPrompt('');
+
+      // Start polling for completion
+      startAiEditPolling();
+    } catch (err) {
+      console.error('Error submitting AI edit:', err);
+      alert('Failed to submit: ' + err.message);
+      setAiEditStatus(null);
+    }
+  };
+
+  const startAiEditPolling = () => {
+    if (aiPollRef.current) clearInterval(aiPollRef.current);
+
+    aiPollRef.current = setInterval(async () => {
+      try {
+        const response = await fetch(`${apiUrl}/documents/${document.id}/notes/ai-edit/status`);
+        const data = await response.json();
+
+        if (data.status === 'processing') {
+          setAiEditStatus('processing');
+        } else if (data.status === 'completed') {
+          clearInterval(aiPollRef.current);
+          aiPollRef.current = null;
+          setAiEditStatus(null);
+          setShowAiEdit(false);
+          // Reload notes to get the updated content
+          await fetchNotes();
+        } else if (data.status === 'failed') {
+          clearInterval(aiPollRef.current);
+          aiPollRef.current = null;
+          setAiEditStatus(null);
+          alert('AI edit failed: ' + (data.error || 'Unknown error'));
+        } else if (!data.status || data.status === 'idle') {
+          // No active job, might have completed between requests
+          clearInterval(aiPollRef.current);
+          aiPollRef.current = null;
+          setAiEditStatus(null);
+          await fetchNotes();
+        }
+      } catch (err) {
+        console.error('Error polling AI edit status:', err);
+      }
+    }, 5000); // Poll every 5 seconds
+  };
+
+  const aiEditInProgress = aiEditStatus === 'queued' || aiEditStatus === 'processing';
 
   return (
     <div className="modal-backdrop" onClick={handleBackdropClick}>
@@ -287,6 +243,25 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
             {notes?.readerMode && getReaderModeBadge(notes.readerMode)}
           </div>
           <div className="header-actions">
+            {isAuthenticated && currentTabHasContent && !isEditing && !showAiEdit && (
+              <>
+                <button
+                  className="edit-btn"
+                  onClick={handleStartEdit}
+                  title="Manual edit"
+                >
+                  Edit
+                </button>
+                <button
+                  className="edit-btn ai-edit-btn"
+                  onClick={() => setShowAiEdit(true)}
+                  title="AI-powered edit"
+                  disabled={aiEditInProgress}
+                >
+                  {aiEditInProgress ? (aiEditStatus === 'processing' ? 'Processing...' : 'Queued...') : 'AI Edit'}
+                </button>
+              </>
+            )}
             <button
               className="maximize-btn"
               onClick={() => setIsMaximized(!isMaximized)}
@@ -300,19 +275,18 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
           </div>
         </div>
 
-        {/* Tabs for paper/code notes */}
         {notes && (notes.hasNotes || notes.hasCodeNotes) && (
           <div className="notes-tabs">
             <button
               className={`notes-tab ${activeTab === 'paper' ? 'active' : ''}`}
-              onClick={() => setActiveTab('paper')}
+              onClick={() => handleTabSwitch('paper')}
               disabled={!notes.hasNotes}
             >
               Paper Notes
             </button>
             <button
               className={`notes-tab ${activeTab === 'code' ? 'active' : ''}`}
-              onClick={() => setActiveTab('code')}
+              onClick={() => handleTabSwitch('code')}
               disabled={!notes.hasCodeNotes}
             >
               Code Notes
@@ -321,13 +295,48 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
           </div>
         )}
 
-        {/* Code URL info */}
         {notes?.codeUrl && (
           <div className="code-url-info">
             <span className="code-label">Code Repository:</span>
             <a href={notes.codeUrl} target="_blank" rel="noopener noreferrer" className="code-link">
               {notes.codeUrl}
             </a>
+          </div>
+        )}
+
+        {/* AI Edit prompt panel */}
+        {showAiEdit && !isEditing && (
+          <div className="ai-edit-panel">
+            <div className="ai-edit-header">
+              <span className="ai-edit-label">AI Edit ({activeTab === 'paper' ? 'Paper' : 'Code'} Notes)</span>
+              <button className="ai-edit-close" onClick={() => setShowAiEdit(false)}>&times;</button>
+            </div>
+            <p className="ai-edit-hint">
+              Describe what you want the AI to fix or change. The AI will use the original PDF and current notes as context.
+            </p>
+            <textarea
+              className="ai-edit-prompt"
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder="e.g., Fix the mermaid diagrams that fail to render, or Rewrite the methodology section to be more clear..."
+              rows={3}
+              disabled={aiEditInProgress}
+            />
+            <div className="ai-edit-actions">
+              {aiEditInProgress && (
+                <span className={`ai-edit-status ${aiEditStatus}`}>
+                  {aiEditStatus === 'queued' && 'Queued - waiting for processing...'}
+                  {aiEditStatus === 'processing' && 'Processing - AI is editing your notes...'}
+                </span>
+              )}
+              <button
+                className="ai-edit-submit"
+                onClick={handleAiEditSubmit}
+                disabled={!aiPrompt.trim() || aiEditInProgress || aiEditStatus === 'submitting'}
+              >
+                {aiEditStatus === 'submitting' ? 'Submitting...' : 'Submit AI Edit'}
+              </button>
+            </div>
           </div>
         )}
 
@@ -366,41 +375,42 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose }) {
             </div>
           )}
 
-          {/* Paper Notes Tab */}
-          {activeTab === 'paper' && notes && notes.hasNotes && parsedPaperNotes && (
-            <div className="notes-markdown">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkMath]}
-                rehypePlugins={[rehypeKatex]}
-                components={markdownComponents}
-              >
-                {parsedPaperNotes.content}
-              </ReactMarkdown>
+          {/* Editing mode */}
+          {isEditing && (
+            <div className="notes-editor-container">
+              <MarkdownEditor
+                value={editContent}
+                onChange={setEditContent}
+                onSave={handleSaveEdit}
+                onCancel={handleCancelEdit}
+                saving={saving}
+              />
             </div>
           )}
 
-          {/* Code Notes Tab */}
-          {activeTab === 'code' && notes && notes.hasCodeNotes && parsedCodeNotes && (
+          {/* Paper Notes Tab (view mode) */}
+          {!isEditing && activeTab === 'paper' && notes && notes.hasNotes && parsedPaperNotes && (
+            <div className="notes-markdown">
+              <MarkdownContent content={parsedPaperNotes.content} />
+            </div>
+          )}
+
+          {/* Code Notes Tab (view mode) */}
+          {!isEditing && activeTab === 'code' && notes && notes.hasCodeNotes && parsedCodeNotes && (
             <div className="notes-markdown code-notes">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkMath]}
-                rehypePlugins={[rehypeKatex]}
-                components={markdownComponents}
-              >
-                {parsedCodeNotes.content}
-              </ReactMarkdown>
+              <MarkdownContent content={parsedCodeNotes.content} />
             </div>
           )}
 
           {/* Empty state for selected tab */}
-          {activeTab === 'paper' && notes && !notes.hasNotes && notes.hasCodeNotes && (
+          {!isEditing && activeTab === 'paper' && notes && !notes.hasNotes && notes.hasCodeNotes && (
             <div className="notes-empty">
               <p>No paper notes available.</p>
               <p className="hint">Switch to Code Notes tab to view code analysis.</p>
             </div>
           )}
 
-          {activeTab === 'code' && notes && !notes.hasCodeNotes && notes.hasNotes && (
+          {!isEditing && activeTab === 'code' && notes && !notes.hasCodeNotes && notes.hasNotes && (
             <div className="notes-empty">
               <p>No code notes available.</p>
               {notes.hasCode ? (

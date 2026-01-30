@@ -6,6 +6,7 @@ const processingProxyService = require('./processing-proxy.service');
 const { spawn } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
+const { cleanLLMResponse } = require('../utils/clean-llm-response');
 
 /**
  * Code Analysis Service
@@ -541,7 +542,7 @@ class CodeAnalysisService {
             timeout: PROCESSING_TIMEOUT_MS,
             model: 'gemini-3-flash-preview',
           });
-          results.push({ round: round.name, content: result.text });
+          results.push({ round: round.name, content: cleanLLMResponse(result.text) });
           console.log(`[CodeAnalysis] ${round.name} completed (${result.text.length} chars)`);
         } catch (error) {
           console.error(`[CodeAnalysis] ${round.name} failed:`, error.message);

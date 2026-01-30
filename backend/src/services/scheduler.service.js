@@ -107,7 +107,32 @@ class SchedulerService {
     }
   }
 
-  // Process the next document in the queue
+  // Process a single queued item
+  async _processItem(item) {
+    console.log(`[Scheduler] Processing document: ${item.title} (ID: ${item.documentId})`);
+    try {
+      const result = await this.readerService.processDocument(item);
+
+      const extraData = {};
+      if (result.codeNotesS3Key) extraData.codeNotesS3Key = result.codeNotesS3Key;
+      if (result.hasCode !== undefined) extraData.hasCode = result.hasCode;
+      if (result.codeUrl) extraData.codeUrl = result.codeUrl;
+
+      await queueService.markCompleted(item.documentId, result.notesS3Key, result.pageCount, extraData);
+      console.log(`[Scheduler] Successfully processed document: ${item.title}`);
+      return { processed: true, documentId: item.documentId };
+    } catch (error) {
+      console.error(`[Scheduler] Failed to process document ${item.documentId}:`, error);
+      const isRecoverable = this.isRecoverableError(error);
+      const retryResult = await queueService.markFailed(item.documentId, error, isRecoverable);
+      if (retryResult.retried) {
+        console.log(`[Scheduler] Document ${item.documentId} will be retried (attempt ${retryResult.retryCount})`);
+      }
+      return { processed: false, error: error.message, retried: retryResult.retried };
+    }
+  }
+
+  // Process next documents in the queue (with concurrency)
   async processNextInQueue() {
     if (!this.readerService) {
       console.warn('[Scheduler] Reader service not set, skipping processing');
@@ -115,55 +140,34 @@ class SchedulerService {
     }
 
     try {
-      // Check if we can process more
-      const canProcess = await queueService.canProcessMore();
-      if (!canProcess) {
-        console.log('[Scheduler] Rate limit reached, waiting...');
-        return { processed: false, reason: 'rate_limit' };
+      const concurrency = config.reader?.concurrency || 2;
+      const items = [];
+
+      // Dequeue up to `concurrency` items
+      for (let i = 0; i < concurrency; i++) {
+        const canProcess = await queueService.canProcessMore();
+        if (!canProcess) {
+          if (i === 0) console.log('[Scheduler] Rate limit reached, waiting...');
+          break;
+        }
+
+        const item = await queueService.dequeueNext();
+        if (!item) break;
+        items.push(item);
       }
 
-      // Get next document
-      const item = await queueService.dequeueNext();
-      if (!item) {
-        // No documents in queue
-        return { processed: false, reason: 'queue_empty' };
+      if (items.length === 0) {
+        return { processed: false, reason: 'queue_empty_or_rate_limited' };
       }
 
-      console.log(`[Scheduler] Processing document: ${item.title} (ID: ${item.documentId})`);
+      // Process all dequeued items concurrently
+      const results = await Promise.allSettled(
+        items.map(item => this._processItem(item))
+      );
 
-      try {
-        // Process the document
-        const result = await this.readerService.processDocument(item);
-
-        // Mark as completed with extra data for auto_reader mode
-        const extraData = {};
-        if (result.codeNotesS3Key) {
-          extraData.codeNotesS3Key = result.codeNotesS3Key;
-        }
-        if (result.hasCode !== undefined) {
-          extraData.hasCode = result.hasCode;
-        }
-        if (result.codeUrl) {
-          extraData.codeUrl = result.codeUrl;
-        }
-
-        await queueService.markCompleted(item.documentId, result.notesS3Key, result.pageCount, extraData);
-
-        console.log(`[Scheduler] Successfully processed document: ${item.title}`);
-        return { processed: true, documentId: item.documentId };
-      } catch (error) {
-        console.error(`[Scheduler] Failed to process document ${item.documentId}:`, error);
-
-        // Determine if error is recoverable
-        const isRecoverable = this.isRecoverableError(error);
-        const retryResult = await queueService.markFailed(item.documentId, error, isRecoverable);
-
-        if (retryResult.retried) {
-          console.log(`[Scheduler] Document ${item.documentId} will be retried (attempt ${retryResult.retryCount})`);
-        }
-
-        return { processed: false, error: error.message, retried: retryResult.retried };
-      }
+      const processed = results.filter(r => r.status === 'fulfilled' && r.value.processed).length;
+      console.log(`[Scheduler] Batch: ${processed}/${items.length} documents processed successfully`);
+      return { processed: processed > 0, count: processed };
     } catch (error) {
       console.error('[Scheduler] Error in process loop:', error);
       return { processed: false, error: error.message };

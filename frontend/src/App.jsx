@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import DocumentList from './components/DocumentList';
 import NotesModal from './components/NotesModal';
+import UserNotesModal from './components/UserNotesModal';
 import LoginModal from './components/LoginModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
@@ -17,6 +18,7 @@ function AppContent() {
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [initialNotesTab, setInitialNotesTab] = useState('paper');
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [userNotesDocument, setUserNotesDocument] = useState(null);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -367,6 +369,7 @@ function AppContent() {
             setSelectedDocument(doc);
             setInitialNotesTab(tab);
           }}
+          onViewUserNotes={(doc) => setUserNotesDocument(doc)}
           onToggleRead={toggleReadStatus}
           onTriggerCodeAnalysis={triggerCodeAnalysis}
           onDelete={deleteDocument}
@@ -417,6 +420,18 @@ function AppContent() {
           apiUrl={API_URL}
           initialTab={initialNotesTab}
           onClose={() => setSelectedDocument(null)}
+          isAuthenticated={isAuthenticated}
+          getAuthHeaders={getAuthHeaders}
+        />
+      )}
+
+      {userNotesDocument && (
+        <UserNotesModal
+          document={userNotesDocument}
+          apiUrl={API_URL}
+          onClose={() => setUserNotesDocument(null)}
+          isAuthenticated={isAuthenticated}
+          getAuthHeaders={getAuthHeaders}
         />
       )}
 

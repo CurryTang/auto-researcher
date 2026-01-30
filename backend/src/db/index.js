@@ -239,6 +239,47 @@ Why this paper might be important for researchers.`
     CREATE INDEX IF NOT EXISTS idx_reading_history_date ON reading_history(read_at DESC)
   `);
 
+  // Create user_notes table for personal annotations
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS user_notes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      document_id INTEGER NOT NULL,
+      title TEXT DEFAULT '',
+      content TEXT DEFAULT '',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+    )
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_user_notes_document ON user_notes(document_id)
+  `);
+
+  // Create AI edit queue table for intelligent note editing
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS ai_edit_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      document_id INTEGER NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('paper', 'code')),
+      prompt TEXT NOT NULL,
+      status TEXT DEFAULT 'queued' CHECK(status IN ('queued', 'processing', 'completed', 'failed')),
+      error_message TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      started_at DATETIME,
+      completed_at DATETIME,
+      FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
+    )
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_ai_edit_queue_status ON ai_edit_queue(status, created_at)
+  `);
+
+  await db.execute(`
+    CREATE INDEX IF NOT EXISTS idx_ai_edit_queue_document ON ai_edit_queue(document_id)
+  `);
+
   console.log('Database initialized');
   return db;
 }

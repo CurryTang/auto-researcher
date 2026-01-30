@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const compression = require('compression');
 const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const routes = require('./routes');
@@ -11,8 +12,12 @@ const schedulerService = require('./services/scheduler.service');
 const readerService = require('./services/reader.service');
 const pdfService = require('./services/pdf.service');
 const codeAnalysisService = require('./services/code-analysis.service');
+const aiEditService = require('./services/ai-edit.service');
 
 const app = express();
+
+// Compression middleware
+app.use(compression());
 
 // Security middleware
 app.use(helmet());
@@ -122,8 +127,9 @@ async function startServer() {
     // All raw files should only be stored in S3, not on the server
     await pdfService.cleanupAllTmpFiles();
 
-    // Initialize document reader scheduler
-    if (config.reader?.enabled) {
+    // Initialize document reader scheduler (only on primary worker in cluster mode)
+    const isPrimaryWorker = !process.env.WORKER_ID || process.env.WORKER_ID === '0';
+    if (config.reader?.enabled && isPrimaryWorker) {
       schedulerService.setReaderService(readerService);
       schedulerService.start();
       console.log('Document reader scheduler started');
@@ -131,6 +137,10 @@ async function startServer() {
       // Start code analysis processor
       codeAnalysisService.startProcessor();
       console.log('Code analysis processor started');
+
+      // Start AI edit processor
+      aiEditService.startProcessor();
+      console.log('AI edit processor started');
     } else {
       console.log('Document reader is disabled');
     }
@@ -150,6 +160,7 @@ process.on('SIGINT', async () => {
   console.log('Shutting down gracefully...');
   schedulerService.stop();
   codeAnalysisService.stopProcessor();
+  aiEditService.stopProcessor();
   process.exit(0);
 });
 
@@ -157,6 +168,7 @@ process.on('SIGTERM', async () => {
   console.log('Received SIGTERM, shutting down...');
   schedulerService.stop();
   codeAnalysisService.stopProcessor();
+  aiEditService.stopProcessor();
   process.exit(0);
 });
 

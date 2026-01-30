@@ -483,4 +483,253 @@ router.get('/:id/reading-history', async (req, res) => {
   }
 });
 
+// PUT /api/documents/:id/notes/content - Update LLM-generated analysis content (requires auth)
+router.put('/:id/notes/content', requireAuth, async (req, res) => {
+  try {
+    const { getDb } = require('../db');
+    const s3Service = require('../services/s3.service');
+    const db = getDb();
+    const { type, content } = req.body;
+
+    if (!type || content === undefined) {
+      return res.status(400).json({ error: 'type and content are required' });
+    }
+
+    const s3KeyField = type === 'paper' ? 'notes_s3_key' : 'code_notes_s3_key';
+
+    const result = await db.execute({
+      sql: `SELECT id, ${s3KeyField} as s3_key FROM documents WHERE id = ?`,
+      args: [req.params.id],
+    });
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    const s3Key = result.rows[0].s3_key;
+    if (!s3Key) {
+      return res.status(404).json({ error: 'No notes found to update' });
+    }
+
+    await s3Service.uploadBuffer(Buffer.from(content, 'utf-8'), s3Key, 'text/markdown');
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating notes content:', error);
+    res.status(500).json({ error: 'Failed to update notes content' });
+  }
+});
+
+// POST /api/documents/:id/notes/ai-edit - Submit AI edit request (requires auth)
+router.post('/:id/notes/ai-edit', requireAuth, async (req, res) => {
+  try {
+    const { getDb } = require('../db');
+    const db = getDb();
+    const { type, prompt } = req.body;
+
+    if (!type || !prompt) {
+      return res.status(400).json({ error: 'type and prompt are required' });
+    }
+
+    // Check document exists and has notes
+    const s3KeyField = type === 'paper' ? 'notes_s3_key' : 'code_notes_s3_key';
+    const doc = await db.execute({
+      sql: `SELECT id, ${s3KeyField} as s3_key FROM documents WHERE id = ?`,
+      args: [req.params.id],
+    });
+
+    if (doc.rows.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    if (!doc.rows[0].s3_key) {
+      return res.status(400).json({ error: 'No notes available to edit' });
+    }
+
+    // Check if there's already an active AI edit for this document
+    const existing = await db.execute({
+      sql: `SELECT id FROM ai_edit_queue WHERE document_id = ? AND status IN ('queued', 'processing')`,
+      args: [req.params.id],
+    });
+
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'An AI edit is already in progress for this document' });
+    }
+
+    // Insert into AI edit queue
+    const result = await db.execute({
+      sql: `INSERT INTO ai_edit_queue (document_id, type, prompt) VALUES (?, ?, ?)`,
+      args: [req.params.id, type, prompt],
+    });
+
+    res.status(201).json({
+      id: Number(result.lastInsertRowid),
+      documentId: parseInt(req.params.id),
+      type,
+      status: 'queued',
+    });
+  } catch (error) {
+    console.error('Error submitting AI edit:', error);
+    res.status(500).json({ error: 'Failed to submit AI edit' });
+  }
+});
+
+// GET /api/documents/:id/notes/ai-edit/status - Get AI edit status
+router.get('/:id/notes/ai-edit/status', async (req, res) => {
+  try {
+    const { getDb } = require('../db');
+    const db = getDb();
+
+    const result = await db.execute({
+      sql: `SELECT id, type, status, error_message, created_at, started_at, completed_at
+            FROM ai_edit_queue
+            WHERE document_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1`,
+      args: [req.params.id],
+    });
+
+    if (result.rows.length === 0) {
+      return res.json({ status: 'idle' });
+    }
+
+    const job = result.rows[0];
+    res.json({
+      id: job.id,
+      type: job.type,
+      status: job.status,
+      error: job.error_message,
+      createdAt: job.created_at,
+      startedAt: job.started_at,
+      completedAt: job.completed_at,
+    });
+  } catch (error) {
+    console.error('Error getting AI edit status:', error);
+    res.status(500).json({ error: 'Failed to get AI edit status' });
+  }
+});
+
+// GET /api/documents/:id/user-notes - List user notes for a document
+router.get('/:id/user-notes', async (req, res) => {
+  try {
+    const { getDb } = require('../db');
+    const db = getDb();
+
+    const result = await db.execute({
+      sql: `SELECT id, document_id, title, content, created_at, updated_at
+            FROM user_notes WHERE document_id = ? ORDER BY updated_at DESC`,
+      args: [req.params.id],
+    });
+
+    res.json({
+      documentId: parseInt(req.params.id),
+      notes: result.rows.map(row => ({
+        id: row.id,
+        documentId: row.document_id,
+        title: row.title,
+        content: row.content,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      })),
+    });
+  } catch (error) {
+    console.error('Error fetching user notes:', error);
+    res.status(500).json({ error: 'Failed to fetch user notes' });
+  }
+});
+
+// POST /api/documents/:id/user-notes - Create a user note (requires auth)
+router.post('/:id/user-notes', requireAuth, async (req, res) => {
+  try {
+    const { getDb } = require('../db');
+    const db = getDb();
+    const { title, content } = req.body;
+
+    const doc = await db.execute({
+      sql: 'SELECT id FROM documents WHERE id = ?',
+      args: [req.params.id],
+    });
+    if (doc.rows.length === 0) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    const result = await db.execute({
+      sql: `INSERT INTO user_notes (document_id, title, content) VALUES (?, ?, ?)`,
+      args: [req.params.id, title || '', content || ''],
+    });
+
+    res.status(201).json({
+      id: Number(result.lastInsertRowid),
+      documentId: parseInt(req.params.id),
+      title: title || '',
+      content: content || '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Error creating user note:', error);
+    res.status(500).json({ error: 'Failed to create user note' });
+  }
+});
+
+// PUT /api/documents/:id/user-notes/:noteId - Update a user note (requires auth)
+router.put('/:id/user-notes/:noteId', requireAuth, async (req, res) => {
+  try {
+    const { getDb } = require('../db');
+    const db = getDb();
+    const { title, content } = req.body;
+
+    const existing = await db.execute({
+      sql: 'SELECT id FROM user_notes WHERE id = ? AND document_id = ?',
+      args: [req.params.noteId, req.params.id],
+    });
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Note not found' });
+    }
+
+    await db.execute({
+      sql: `UPDATE user_notes SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND document_id = ?`,
+      args: [title || '', content || '', req.params.noteId, req.params.id],
+    });
+
+    res.json({
+      id: parseInt(req.params.noteId),
+      documentId: parseInt(req.params.id),
+      title: title || '',
+      content: content || '',
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Error updating user note:', error);
+    res.status(500).json({ error: 'Failed to update user note' });
+  }
+});
+
+// DELETE /api/documents/:id/user-notes/:noteId - Delete a user note (requires auth)
+router.delete('/:id/user-notes/:noteId', requireAuth, async (req, res) => {
+  try {
+    const { getDb } = require('../db');
+    const db = getDb();
+
+    const existing = await db.execute({
+      sql: 'SELECT id FROM user_notes WHERE id = ? AND document_id = ?',
+      args: [req.params.noteId, req.params.id],
+    });
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Note not found' });
+    }
+
+    await db.execute({
+      sql: 'DELETE FROM user_notes WHERE id = ? AND document_id = ?',
+      args: [req.params.noteId, req.params.id],
+    });
+
+    res.json({ message: 'Note deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting user note:', error);
+    res.status(500).json({ error: 'Failed to delete user note' });
+  }
+});
+
 module.exports = router;
