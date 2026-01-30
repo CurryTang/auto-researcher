@@ -16,11 +16,22 @@ const aiEditService = require('./services/ai-edit.service');
 
 const app = express();
 
+// CORS must be before helmet/rate-limiting so preflight OPTIONS gets proper headers
+app.use(
+  cors({
+    origin: config.cors.origin,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+
 // Compression middleware
 app.use(compression());
 
-// Security middleware
-app.use(helmet());
+// Security middleware - disable crossOriginResourcePolicy for API access
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 
 // Rate limiting - prevent abuse (configurable via config/index.js)
 const generalLimiter = rateLimit({
@@ -60,15 +71,6 @@ const uploadLimiter = rateLimit({
 
 // Apply general rate limit to all requests
 app.use(generalLimiter);
-
-// CORS configuration
-app.use(
-  cors({
-    origin: config.cors.origin,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  })
-);
 
 // Body parsing middleware
 app.use(express.json());
