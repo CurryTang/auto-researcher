@@ -35,3 +35,8 @@ npm-debug.log*
 backend/tmp_paper.txt
 backend/get-pip.py
 backend/.venv/
+
+# FRP configuration and binaries
+frpc/
+frpc.toml
+frps.toml
