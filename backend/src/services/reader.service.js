@@ -3,6 +3,7 @@ const config = require('../config');
 const pdfService = require('./pdf.service');
 const geminiCliService = require('./gemini-cli.service');
 const googleApiService = require('./google-api.service');
+const codexCliService = require('./codex-cli.service');
 const mathpixService = require('./mathpix.service');
 const llmService = require('./llm.service');
 const s3Service = require('./s3.service');
@@ -28,6 +29,14 @@ const PROVIDERS = {
     readDocument: (filePath, prompt, options) => googleApiService.readDocument(filePath, prompt, options),
     readMarkdown: (content, prompt, options) => googleApiService.readMarkdown(content, prompt, options),
     analyzeRepository: (repoDir, prompt, options) => googleApiService.analyzeRepository(repoDir, prompt, options),
+  },
+  'codex-cli': {
+    name: 'Codex CLI',
+    description: 'OpenAI Codex CLI (gpt-5.1-codex-mini)',
+    isAvailable: () => codexCliService.isAvailable(),
+    readDocument: (filePath, prompt, options) => codexCliService.readDocument(filePath, prompt, options),
+    readMarkdown: (content, prompt, options) => codexCliService.readMarkdown(content, prompt, options),
+    analyzeRepository: (repoDir, prompt, options) => codexCliService.analyzeRepository(repoDir, prompt, options),
   },
   'claude-code': {
     name: 'Claude Code',
@@ -225,7 +234,7 @@ class ReaderService {
     }
 
     // Fallback order: gemini-cli -> google-api -> claude-code
-    const fallbackOrder = ['gemini-cli', 'google-api', 'claude-code'];
+    const fallbackOrder = ['gemini-cli', 'google-api', 'codex-cli', 'claude-code'];
     
     for (const providerId of fallbackOrder) {
       if (providerId === requestedProvider) continue; // Already tried
@@ -292,7 +301,7 @@ class ReaderService {
     }
 
     // Fallback order for markdown processing
-    const fallbackOrder = ['gemini-cli', 'google-api', 'claude-code'];
+    const fallbackOrder = ['gemini-cli', 'google-api', 'codex-cli', 'claude-code'];
     
     for (const providerId of fallbackOrder) {
       if (providerId === requestedProvider) continue;

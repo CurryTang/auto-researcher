@@ -2,6 +2,8 @@ const { getDb } = require('../db');
 const config = require('../config');
 const pdfService = require('./pdf.service');
 const geminiCliService = require('./gemini-cli.service');
+const codexCliService = require('./codex-cli.service');
+const googleApiService = require('./google-api.service');
 const claudeCodeService = require('./claude-code.service');
 const s3Service = require('./s3.service');
 const { spawn } = require('child_process');
@@ -328,11 +330,13 @@ class AutoReaderService {
    * Process a document in auto_reader mode (multi-pass)
    */
   async processDocument(item, options = {}) {
-    const { documentId, s3Key, title } = item;
+    const { documentId, s3Key, title, analysisProvider } = item;
     // Use provided codeUrl if available (from request or document)
     let providedCodeUrl = item.codeUrl;
     let tempFilePath = null;
     const notesFilePath = path.join(this.processingDir, `${documentId}_notes.md`);
+    // Resolve which provider service to use
+    this._currentProvider = this._resolveProvider(analysisProvider);
 
     try {
       await this.ensureProcessingDir();
@@ -494,10 +498,25 @@ ${data.initial_impression || ''}
   /**
    * Execute a single reading pass
    */
-  async executePass(pdfPath, prompt, notesFilePath, passNumber) {
-    console.log(`[AutoReader] Executing pass ${passNumber}...`);
+  /**
+   * Resolve provider service from provider name
+   */
+  _resolveProvider(providerName) {
+    switch (providerName) {
+      case 'codex-cli': return codexCliService;
+      case 'google-api': return googleApiService;
+      case 'gemini-cli':
+      default: return geminiCliService;
+    }
+  }
 
-    const result = await geminiCliService.readDocument(pdfPath, prompt);
+  async executePass(pdfPath, prompt, notesFilePath, passNumber) {
+    const provider = this._currentProvider || geminiCliService;
+    const providerName = this._currentProvider === codexCliService ? 'Codex CLI'
+      : this._currentProvider === googleApiService ? 'Google API' : 'Gemini CLI';
+    console.log(`[AutoReader] Executing pass ${passNumber} with ${providerName}...`);
+
+    const result = await provider.readDocument(pdfPath, prompt);
 
     console.log(`[AutoReader] Pass ${passNumber} complete, output: ${result.text.length} chars`);
 
@@ -915,11 +934,11 @@ Input --> Module A --> Module B --> Output
       await fs.writeFile(promptPath, prompt, 'utf-8');
 
       try {
-        // Use Gemini CLI to summarize
-        const result = await geminiCliService.runWithPromptFile(promptPath, {
-          timeout: 60000,
-          model: 'gemini-3-flash-preview',
-        });
+        // Use current provider to summarize
+        const provider = this._currentProvider || geminiCliService;
+        const result = provider.runWithPromptFile
+          ? await provider.runWithPromptFile(promptPath, { timeout: 60000 })
+          : await provider.readMarkdown(prompt, '', { timeout: 60000 });
         return result.text;
       } finally {
         // Cleanup prompt file

@@ -84,6 +84,14 @@ module.exports = {
     model: process.env.GOOGLE_API_MODEL || 'gemini-3-flash-preview',
   },
 
+  // Codex CLI Configuration (OpenAI Codex)
+  codexCli: {
+    path: process.env.CODEX_CLI_PATH || 'codex',
+    model: process.env.CODEX_CLI_MODEL || 'gpt-5.1-codex-mini',
+    sandbox: process.env.CODEX_CLI_SANDBOX || 'workspace-write',
+    approval: process.env.CODEX_CLI_APPROVAL || 'never',
+  },
+
   // Claude Code CLI Configuration
   claudeCli: {
     path: process.env.CLAUDE_CLI_PATH || 'claude',
