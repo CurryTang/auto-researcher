@@ -37,6 +37,6 @@ backend/get-pip.py
 backend/.venv/
 
 # FRP configuration and binaries
-frpc/
+backend/frpc
 frpc.toml
 frps.toml
