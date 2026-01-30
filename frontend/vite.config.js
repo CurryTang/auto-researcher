@@ -10,22 +10,19 @@ export default defineConfig({
     outDir: 'dist',
     rollupOptions: {
       output: {
-        // Bundle mermaid and all its dependencies together to avoid dynamic import issues
-        // on GitHub Pages (dagre, cytoscape, etc. are loaded dynamically by mermaid)
+        // Mermaid is lazy-loaded via dynamic import() to reduce initial bundle
+        // and build memory usage. Group its deps together when loaded.
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
-            // Bundle all mermaid-related packages together
             if (id.includes('mermaid') ||
                 id.includes('dagre') ||
                 id.includes('cytoscape') ||
                 id.includes('d3') ||
                 id.includes('elkjs') ||
-                id.includes('katex') ||
                 id.includes('khroma') ||
                 id.includes('lodash')) {
               return 'mermaid-vendor';
             }
-            // Bundle React and related packages
             if (id.includes('react')) {
               return 'react-vendor';
             }

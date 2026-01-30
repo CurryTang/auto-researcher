@@ -4,18 +4,27 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import mermaid from 'mermaid';
 
-// Initialize mermaid with better unicode support
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'default',
-  securityLevel: 'loose',
-  flowchart: {
-    htmlLabels: true,
-    useMaxWidth: true,
-  },
-});
+// Lazy-load mermaid to reduce bundle size and build memory usage
+let mermaidPromise = null;
+function getMermaid() {
+  if (!mermaidPromise) {
+    mermaidPromise = import('mermaid').then((mod) => {
+      const mermaid = mod.default;
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'default',
+        securityLevel: 'loose',
+        flowchart: {
+          htmlLabels: true,
+          useMaxWidth: true,
+        },
+      });
+      return mermaid;
+    });
+  }
+  return mermaidPromise;
+}
 
 // Pre-process mermaid code to fix common issues
 export function preprocessMermaidCode(code) {
@@ -58,12 +67,15 @@ export function MermaidDiagram({ code }) {
   const containerRef = useRef(null);
   const [svg, setSvg] = useState('');
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const renderDiagram = async () => {
       if (!code) return;
+      setLoading(true);
       const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
       try {
+        const mermaid = await getMermaid();
         const processedCode = preprocessMermaidCode(code);
         const tempContainer = document.createElement('div');
         tempContainer.style.display = 'none';
@@ -76,10 +88,16 @@ export function MermaidDiagram({ code }) {
         console.error('Mermaid render error:', err);
         setError(err.message);
         document.querySelectorAll(`#d${id}, [id^="dmermaid-"]`).forEach(el => el.remove());
+      } finally {
+        setLoading(false);
       }
     };
     renderDiagram();
   }, [code]);
+
+  if (loading && !svg && !error) {
+    return <div className="mermaid-loading">Loading diagram...</div>;
+  }
 
   if (error) {
     return (
