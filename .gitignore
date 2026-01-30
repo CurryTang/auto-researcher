@@ -30,3 +30,8 @@ npm-debug.log*
 
 # Local database
 *.db
+
+# Backend temp files
+backend/tmp_paper.txt
+backend/get-pip.py
+backend/.venv/
