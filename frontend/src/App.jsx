@@ -29,7 +29,7 @@ function AppContent() {
 
   const { isAuthenticated, isLoading: authLoading, logout, getAuthHeaders } = useAuth();
 
-  const LIMIT = 5;
+  const LIMIT = 10;
 
   // Fetch documents with pagination
   const fetchDocuments = async (reset = false) => {
