@@ -429,6 +429,10 @@ function AppContent() {
               )
             );
           }}
+          onViewUserNotes={(doc) => {
+            setSelectedDocument(null);
+            setUserNotesDocument(doc);
+          }}
         />
       )}
 

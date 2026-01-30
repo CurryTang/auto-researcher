@@ -680,9 +680,9 @@ body {
 
 /* Action buttons - unified style */
 .action-btn {
-  padding: 8px 16px;
+  padding: 5px 10px;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
@@ -793,8 +793,10 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 /* Notes Modal */
@@ -915,6 +917,17 @@ body {
   color: white;
   padding: 2px 6px;
   border-radius: 10px;
+}
+
+.notes-tab.user-notes-tab {
+  margin-left: auto;
+  color: #7c3aed;
+  font-size: 13px;
+}
+
+.notes-tab.user-notes-tab:hover {
+  color: #6d28d9;
+  background: #f5f3ff;
 }
 
 /* Code URL Info */

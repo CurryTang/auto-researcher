@@ -113,7 +113,7 @@ function DocumentCard({ document, onDownload, onViewNotes, onViewUserNotes, onTo
     if (codeAnalysisStatus === 'completed') {
       return (
         <button className="action-btn code-btn" onClick={() => onViewNotes(document, 'code')} title="View code analysis">
-          Code
+          Code Notes
         </button>
       );
     }
@@ -136,7 +136,7 @@ function DocumentCard({ document, onDownload, onViewNotes, onViewUserNotes, onTo
 
     return (
       <button className="action-btn code-btn" onClick={handleTriggerCodeAnalysis} disabled={triggeringAnalysis} title="Deep code analysis (Opus, ~30 min)">
-        {triggeringAnalysis ? '...' : 'Analyze'}
+        {triggeringAnalysis ? '...' : 'Analyze Code'}
       </button>
     );
   };
@@ -176,23 +176,23 @@ function DocumentCard({ document, onDownload, onViewNotes, onViewUserNotes, onTo
           disabled={togglingRead}
           title={document.isRead ? 'Mark as unread' : 'Mark as read'}
         >
-          {togglingRead ? '...' : document.isRead ? '✓ Read' : 'Read'}
+          {togglingRead ? '...' : document.isRead ? '✓ Read' : 'Mark Read'}
         </button>
         {aiEditInProgress ? (
           <button className="action-btn waiting-btn" disabled title="AI is editing notes">
             {document.aiEditStatus === 'processing' ? 'AI Editing...' : 'AI Queued...'}
           </button>
         ) : hasNotes ? (
-          <button className="action-btn paper-btn" onClick={() => onViewNotes(document, 'paper')} title="View paper notes">
-            Paper
+          <button className="action-btn paper-btn" onClick={() => onViewNotes(document, 'paper')} title="View AI-generated notes">
+            AI Notes
           </button>
         ) : (
           <button className="action-btn status-btn" onClick={() => onViewNotes(document, 'paper')} title="View processing status">
             {processingStatus === 'processing' ? '...' : 'Status'}
           </button>
         )}
-        <button className="action-btn notes-btn" onClick={() => onViewUserNotes(document)} title="My notes">
-          Notes
+        <button className="action-btn notes-btn" onClick={() => onViewUserNotes(document)} title="My personal notes">
+          User Notes
         </button>
         {!aiEditInProgress && renderCodeButton()}
         <button className="action-btn pdf-btn" onClick={handleDownload} disabled={downloading}>

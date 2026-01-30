@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import MarkdownContent, { parseFrontmatter, cleanNotesContent } from './shared/MarkdownRenderer';
 import MarkdownEditor from './MarkdownEditor';
 
-function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthenticated, getAuthHeaders, onAiEditStatusChange }) {
+function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthenticated, getAuthHeaders, onAiEditStatusChange, onViewUserNotes }) {
   const [notes, setNotes] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -289,6 +289,14 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthent
             >
               Paper Notes
             </button>
+            {onViewUserNotes && (
+              <button
+                className="notes-tab user-notes-tab"
+                onClick={() => { onClose(); onViewUserNotes(document); }}
+              >
+                User Notes
+              </button>
+            )}
             <button
               className={`notes-tab ${activeTab === 'code' ? 'active' : ''}`}
               onClick={() => handleTabSwitch('code')}
