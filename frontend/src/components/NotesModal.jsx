@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import MarkdownContent, { parseFrontmatter, cleanNotesContent } from './shared/MarkdownRenderer';
 import MarkdownEditor from './MarkdownEditor';
 
-function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthenticated, getAuthHeaders }) {
+function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthenticated, getAuthHeaders, onAiEditStatusChange }) {
   const [notes, setNotes] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -187,6 +187,7 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthent
 
       setAiEditStatus('queued');
       setAiPrompt('');
+      onAiEditStatusChange?.('queued');
 
       // Start polling for completion
       startAiEditPolling();
@@ -207,23 +208,27 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthent
 
         if (data.status === 'processing') {
           setAiEditStatus('processing');
+          onAiEditStatusChange?.('processing');
         } else if (data.status === 'completed') {
           clearInterval(aiPollRef.current);
           aiPollRef.current = null;
           setAiEditStatus(null);
           setShowAiEdit(false);
+          onAiEditStatusChange?.(null);
           // Reload notes to get the updated content
           await fetchNotes();
         } else if (data.status === 'failed') {
           clearInterval(aiPollRef.current);
           aiPollRef.current = null;
           setAiEditStatus(null);
+          onAiEditStatusChange?.(null);
           alert('AI edit failed: ' + (data.error || 'Unknown error'));
         } else if (!data.status || data.status === 'idle') {
           // No active job, might have completed between requests
           clearInterval(aiPollRef.current);
           aiPollRef.current = null;
           setAiEditStatus(null);
+          onAiEditStatusChange?.(null);
           await fetchNotes();
         }
       } catch (err) {

@@ -422,6 +422,13 @@ function AppContent() {
           onClose={() => setSelectedDocument(null)}
           isAuthenticated={isAuthenticated}
           getAuthHeaders={getAuthHeaders}
+          onAiEditStatusChange={(status) => {
+            setDocuments((prev) =>
+              prev.map((doc) =>
+                doc.id === selectedDocument.id ? { ...doc, aiEditStatus: status } : doc
+              )
+            );
+          }}
         />
       )}
 

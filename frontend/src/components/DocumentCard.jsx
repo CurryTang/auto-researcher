@@ -98,6 +98,7 @@ function DocumentCard({ document, onDownload, onViewNotes, onViewUserNotes, onTo
   const hasNotes = processingStatus === 'completed';
   const readerMode = document.readerMode || 'vanilla';
   const codeAnalysisStatus = document.codeAnalysisStatus;
+  const aiEditInProgress = document.aiEditStatus === 'queued' || document.aiEditStatus === 'processing';
 
   const getReaderModeBadge = () => {
     if (readerMode === 'auto_reader') {
@@ -148,6 +149,7 @@ function DocumentCard({ document, onDownload, onViewNotes, onViewUserNotes, onTo
           {getStatusBadge(processingStatus)}
           {getReaderModeBadge()}
           {document.hasCode && <span className="code-indicator" title="Has code repository">{'</>'}</span>}
+          {aiEditInProgress && <span className="status-badge status-processing">AI Editing</span>}
           <span className="document-date">{formatDate(document.createdAt)}</span>
         </div>
         <h3 className="document-title">{document.title}</h3>
@@ -176,7 +178,11 @@ function DocumentCard({ document, onDownload, onViewNotes, onViewUserNotes, onTo
         >
           {togglingRead ? '...' : document.isRead ? '✓ Read' : 'Read'}
         </button>
-        {hasNotes ? (
+        {aiEditInProgress ? (
+          <button className="action-btn waiting-btn" disabled title="AI is editing notes">
+            {document.aiEditStatus === 'processing' ? 'AI Editing...' : 'AI Queued...'}
+          </button>
+        ) : hasNotes ? (
           <button className="action-btn paper-btn" onClick={() => onViewNotes(document, 'paper')} title="View paper notes">
             Paper
           </button>
@@ -188,7 +194,7 @@ function DocumentCard({ document, onDownload, onViewNotes, onViewUserNotes, onTo
         <button className="action-btn notes-btn" onClick={() => onViewUserNotes(document)} title="My notes">
           Notes
         </button>
-        {renderCodeButton()}
+        {!aiEditInProgress && renderCodeButton()}
         <button className="action-btn pdf-btn" onClick={handleDownload} disabled={downloading}>
           {downloading ? '...' : 'PDF'}
         </button>
