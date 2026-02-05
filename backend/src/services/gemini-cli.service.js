@@ -59,9 +59,21 @@ async function readDocument(filePath, prompt, options = {}) {
 
     console.log(`[Gemini CLI] Running: ${geminiPath} -m ${model} with prompt referencing: ${filePath}`);
 
+    // Use unique config dir per call to prevent session cross-contamination.
+    // Gemini CLI stores sessions in $XDG_CONFIG_HOME/gemini or ~/.gemini.
+    // Without isolation, concurrent calls share session state and mix up documents.
+    const uniqueId = `${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2)}`;
+    const isolatedConfigDir = `/tmp/gemini-isolated-${uniqueId}`;
+    const isolatedEnv = {
+      ...process.env,
+      XDG_CONFIG_HOME: isolatedConfigDir,
+      HOME: isolatedConfigDir, // Fallback in case XDG_CONFIG_HOME is not respected
+    };
+
     const proc = spawn(geminiPath, args, {
       timeout: timeoutMs,
       maxBuffer: 50 * 1024 * 1024, // 50MB buffer for large outputs
+      env: isolatedEnv,
     });
 
     let stdout = '';
@@ -76,6 +88,9 @@ async function readDocument(filePath, prompt, options = {}) {
     });
 
     proc.on('close', (code) => {
+      // Cleanup isolated config dir (async, don't wait)
+      fs.rm(isolatedConfigDir, { recursive: true, force: true }).catch(() => {});
+
       if (code === 0) {
         // Try to parse as JSON first
         try {

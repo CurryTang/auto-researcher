@@ -60,7 +60,10 @@ module.exports = {
     maxPerHour: parseInt(process.env.READER_MAX_PER_HOUR) || 5,
     maxPageCount: parseInt(process.env.READER_MAX_PAGE_COUNT) || 40,
     maxFileSizeMb: parseInt(process.env.READER_MAX_FILE_SIZE_MB) || 5,
-    concurrency: parseInt(process.env.READER_CONCURRENCY) || 2,
+    // IMPORTANT: Set to 1 to prevent Gemini CLI session cross-contamination.
+    // Gemini CLI shares session state in ~/.gemini/tmp/, so concurrent calls
+    // can cause notes from one document to leak into another's processing.
+    concurrency: parseInt(process.env.READER_CONCURRENCY) || 1,
     defaultProvider: process.env.READER_DEFAULT_PROVIDER || 'gemini-cli',
     // Use project directory for tmp files - Gemini CLI can only access files within project
     // Using 'processing' instead of 'tmp' to avoid .gitignore issues
