@@ -64,7 +64,7 @@ module.exports = {
     // Gemini CLI shares session state in ~/.gemini/tmp/, so concurrent calls
     // can cause notes from one document to leak into another's processing.
     concurrency: parseInt(process.env.READER_CONCURRENCY) || 1,
-    defaultProvider: process.env.READER_DEFAULT_PROVIDER || 'gemini-cli',
+    defaultProvider: process.env.READER_DEFAULT_PROVIDER || 'codex-cli',
     // Use project directory for tmp files - Gemini CLI can only access files within project
     // Using 'processing' instead of 'tmp' to avoid .gitignore issues
     tmpDir: process.env.READER_TMP_DIR || path.join(__dirname, '..', '..', 'processing'),

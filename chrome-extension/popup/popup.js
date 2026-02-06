@@ -44,7 +44,59 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupTagListeners();
   setupFileListeners();
   setupProviderListener();
+  setupPasteHandlers();
 });
+
+// Setup paste event handlers for all input fields
+// Chrome extensions may block clipboard events by default
+function setupPasteHandlers() {
+  const inputFields = [titleInput, urlInput, tagInput, notesInput];
+
+  inputFields.forEach(input => {
+    if (!input) return;
+
+    // Ensure paste events work by explicitly handling them
+    input.addEventListener('paste', (e) => {
+      // Let the default paste behavior work
+      // This explicit handler ensures the event isn't blocked
+    });
+
+    // Also handle keydown for Cmd+V / Ctrl+V as fallback
+    input.addEventListener('keydown', async (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'v') {
+        // If the default paste doesn't work, try to read from clipboard
+        try {
+          // Only intervene if paste seems blocked (check after a tick)
+          const beforeValue = input.value;
+          const selStart = input.selectionStart;
+          const selEnd = input.selectionEnd;
+
+          // Wait a tick to see if default paste worked
+          setTimeout(async () => {
+            if (input.value === beforeValue) {
+              // Default paste didn't work, try clipboard API
+              try {
+                const text = await navigator.clipboard.readText();
+                if (text) {
+                  // Insert at cursor position
+                  const newValue = beforeValue.substring(0, selStart) + text + beforeValue.substring(selEnd);
+                  input.value = newValue;
+                  input.selectionStart = input.selectionEnd = selStart + text.length;
+                  // Trigger input event for any listeners
+                  input.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+              } catch (clipErr) {
+                console.log('Clipboard API not available:', clipErr);
+              }
+            }
+          }, 10);
+        } catch (err) {
+          console.log('Paste handler error:', err);
+        }
+      }
+    });
+  });
+}
 
 // Load stored settings (API URL and presets)
 async function loadStoredSettings() {
@@ -69,9 +121,14 @@ async function loadStoredSettings() {
       storedPresets = getDefaultPresets();
     }
 
-    // Set default provider if stored
-    if (result.defaultProvider && analysisProviderSelect) {
-      analysisProviderSelect.value = result.defaultProvider;
+    // Set default provider if stored, otherwise use codex-cli as default
+    if (analysisProviderSelect) {
+      if (result.defaultProvider) {
+        analysisProviderSelect.value = result.defaultProvider;
+      } else {
+        // Default to codex-cli if no stored preference
+        analysisProviderSelect.value = 'codex-cli';
+      }
     }
   } catch (error) {
     console.error('Failed to load settings:', error);
@@ -93,29 +150,30 @@ async function loadProviders() {
 }
 
 // Update provider dropdown with available options
+// Note: We no longer disable providers based on server availability since the server
+// may have different CLI tools available than what's checked. The user can select
+// any provider and the server will handle fallback if needed.
 function updateProviderOptions(providers) {
   if (!analysisProviderSelect || !providers) return;
 
-  // Get currently selected value
+  // Get currently selected value or stored default
   const currentValue = analysisProviderSelect.value;
 
-  // Clear and rebuild options
-  analysisProviderSelect.innerHTML = '';
-
+  // Don't rebuild options - just update the display names if needed
+  // This prevents losing the user's selection when providers reload
   providers.forEach(provider => {
-    const option = document.createElement('option');
-    option.value = provider.id;
-    option.textContent = `${provider.name}${provider.available ? '' : ' (unavailable)'}`;
-    option.disabled = !provider.available;
-    analysisProviderSelect.appendChild(option);
+    const option = analysisProviderSelect.querySelector(`option[value="${provider.id}"]`);
+    if (option) {
+      // Keep the option enabled - server will handle fallback
+      option.disabled = false;
+      // Optionally show availability hint but don't disable
+      option.textContent = provider.name;
+    }
   });
 
-  // Restore selection if still available
+  // Restore current selection (should already be set, but ensure it)
   if (currentValue) {
-    const option = analysisProviderSelect.querySelector(`option[value="${currentValue}"]`);
-    if (option && !option.disabled) {
-      analysisProviderSelect.value = currentValue;
-    }
+    analysisProviderSelect.value = currentValue;
   }
 }
 
@@ -921,7 +979,7 @@ async function uploadFile(data) {
     formData.append('type', data.type);
     formData.append('tags', JSON.stringify(data.tags));
     formData.append('notes', data.notes || '');
-    formData.append('analysisProvider', data.analysisProvider || 'gemini-cli');
+    formData.append('analysisProvider', data.analysisProvider || 'codex-cli');
 
     const response = await fetch(`${API_BASE_URL}/upload/direct`, {
       method: 'POST',
@@ -952,7 +1010,7 @@ function getFormData() {
     type: typeSelect.value,
     tags: selectedTags.map(t => t.name),
     notes: notesInput.value.trim(),
-    analysisProvider: analysisProviderSelect ? analysisProviderSelect.value : 'gemini-cli',
+    analysisProvider: analysisProviderSelect ? analysisProviderSelect.value : 'codex-cli',
   };
 }
 

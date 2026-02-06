@@ -43,7 +43,7 @@ router.get('/providers', async (req, res) => {
     const providers = await readerService.getAvailableProviders();
     res.json({
       providers,
-      defaultProvider: 'gemini-cli',
+      defaultProvider: 'codex-cli',
     });
   } catch (error) {
     console.error('Error getting providers:', error);
