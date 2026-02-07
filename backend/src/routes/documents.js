@@ -6,37 +6,49 @@ const { requireAuth } = require('../middleware/auth');
 // GET /api/documents - List all documents with pagination
 router.get('/', async (req, res) => {
   try {
-    const { page, limit = 20, offset, type, search, tags } = req.query;
+    const { page, limit = 20, offset, type, search, tags, sort, order, readFilter } = req.query;
 
     const filters = {
       userId: req.query.userId || 'default_user',
       type,
       search,
       tags: tags ? tags.split(',') : undefined,
+      readFilter,
     };
 
     // Support both page-based and offset-based pagination
-    const parsedLimit = Math.min(parseInt(limit, 10), 100);
+    const limitValue = parseInt(limit, 10);
+    const parsedLimit = Number.isFinite(limitValue) && limitValue > 0
+      ? Math.min(limitValue, 100)
+      : 20;
     let pagination;
 
     if (offset !== undefined) {
+      const offsetValue = parseInt(offset, 10);
       // Offset-based pagination
       pagination = {
-        offset: parseInt(offset, 10),
+        offset: Number.isFinite(offsetValue) && offsetValue >= 0 ? offsetValue : 0,
         limit: parsedLimit,
       };
     } else {
+      const pageValue = parseInt(page, 10);
       // Page-based pagination (default)
       pagination = {
-        page: parseInt(page, 10) || 1,
+        page: Number.isFinite(pageValue) && pageValue > 0 ? pageValue : 1,
         limit: parsedLimit,
       };
     }
 
-    const result = await documentService.getDocuments(filters, pagination);
+    const sortOptions = { sort, order };
+    const options = { includeTotal: req.query.includeTotal === 'true' };
+
+    const result = await documentService.getDocuments(filters, pagination, sortOptions, options);
     res.json(result);
   } catch (error) {
     console.error('Error fetching documents:', error);
+    if (error.code === 'ETIMEDOUT') {
+      return res.status(504).json({ error: 'Documents query timed out. Please retry.' });
+    }
     res.status(500).json({ error: 'Failed to fetch documents' });
   }
 });

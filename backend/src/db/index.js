@@ -62,7 +62,7 @@ async function initDatabase() {
     { name: 'processing_completed_at', definition: 'DATETIME' },
     { name: 'is_read', definition: 'INTEGER DEFAULT 0' },
     // Auto-reader mode columns
-    { name: 'reader_mode', definition: "TEXT DEFAULT 'auto_reader'" },
+    { name: 'reader_mode', definition: "TEXT DEFAULT 'auto_reader_v2'" },
     { name: 'code_notes_s3_key', definition: 'TEXT' },
     { name: 'has_code', definition: 'INTEGER DEFAULT 0' },
     { name: 'code_url', definition: 'TEXT' },

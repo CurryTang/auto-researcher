@@ -25,7 +25,20 @@ router.get('/modes', (req, res) => {
         features: [
           '3-pass paper reading',
           'Mathematical framework extraction',
-          'Excalidraw figure generation',
+          'Mermaid diagram generation',
+          'Code repository analysis (if available)',
+          '中文输出',
+        ],
+      },
+      {
+        id: 'auto_reader_v2',
+        name: 'Auto Reader V2',
+        description: 'Multi-pass deep reading with pre-rendered diagrams as images (Chinese output)',
+        features: [
+          '3-pass paper reading',
+          'Mathematical framework extraction',
+          'Pre-rendered SVG diagrams (Kroki + mermaid-cli)',
+          'Diagram validation & auto-fix',
           'Code repository analysis (if available)',
           '中文输出',
         ],

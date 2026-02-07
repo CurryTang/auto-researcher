@@ -159,10 +159,21 @@ body {
   color: var(--text);
 }
 
-.tag-filter {
+.tag-filter,
+.sort-filter {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sort-filter {
+  margin-top: 10px;
+}
+
+.sort-chips {
+  display: flex;
+  gap: 8px;
   flex-wrap: wrap;
 }
 

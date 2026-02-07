@@ -59,19 +59,12 @@ function runCodex(prompt, options = {}) {
 
     console.log(`[Codex CLI] Running: ${codexPath} exec --dangerously-bypass-approvals-and-sandbox -m ${model} (prompt: ${prompt.length} chars)`);
 
-    // Use unique config dir per call to prevent potential session cross-contamination
-    const uniqueId = `${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2)}`;
-    const isolatedConfigDir = `/tmp/codex-isolated-${uniqueId}`;
-    const isolatedEnv = {
-      ...process.env,
-      XDG_CONFIG_HOME: isolatedConfigDir,
-      HOME: isolatedConfigDir,
-    };
-
+    // Session isolation is handled by concurrency=1 in config (only one Codex
+    // process at a time). Overriding HOME or XDG_CONFIG_HOME would break auth
+    // since Codex stores credentials in ~/.codex/auth.json.
     const proc = spawn(codexPath, args, {
       timeout: timeoutMs,
       maxBuffer: 50 * 1024 * 1024, // 50MB buffer
-      env: isolatedEnv,
     });
 
     let stdout = '';
@@ -86,9 +79,6 @@ function runCodex(prompt, options = {}) {
     });
 
     proc.on('close', (code) => {
-      // Cleanup isolated config dir (async, don't wait)
-      fs.rm(isolatedConfigDir, { recursive: true, force: true }).catch(() => {});
-
       if (code === 0) {
         // Try to parse as JSON first
         try {

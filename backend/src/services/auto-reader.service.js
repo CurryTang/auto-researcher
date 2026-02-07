@@ -27,38 +27,47 @@ const { cleanLLMResponse } = require('../utils/clean-llm-response');
  * 3. 核心实现: Key methods, implementation details, reproduce guide
  */
 
+// ============== TEXT FIGURE RULES ==============
+const TEXT_FIGURE_RULES = `
+## 图表绘制规则（必须严格遵守）
+
+**禁止使用Mermaid**。所有图表必须使用纯文本/ASCII字符画，放在 \`\`\` 代码块中。
+
+绘制规则：
+1. 使用 Unicode box-drawing 字符：┌ ┐ └ ┘ │ ─ ├ ┤ ┬ ┴ ┼ ▶ ▼ ◀ ▲
+2. 用箭头表示数据流：────▶  ····▶（虚线）  ════▶（粗线）
+3. 用方框表示模块：┌──────┐ │ 模块 │ └──────┘
+4. 可以使用中文标签
+5. 保持对齐和美观
+6. 图表宽度不超过80字符
+
+示例：
+\`\`\`
+┌──────────┐     ┌──────────┐     ┌──────────┐
+│  Input   │────▶│ Process  │────▶│  Output  │
+└──────────┘     └────┬─────┘     └──────────┘
+                      │
+                      ▼
+                ┌──────────┐
+                │ Side Eff │
+                └──────────┘
+\`\`\`
+`;
+
 // ============== PROMPTS FOR PAPER READING ==============
 
-/**
- * 新的3阶段阅读模板:
- *
- * Prompt 1: 三分钟综述 - 快速理解论文要点
- *   - 领域：研究领域和子方向
- *   - 问题：解决什么问题，为什么重要
- *   - 贡献：核心贡献点
- *   - 数据：使用的数据集/实验环境
- *   - 结果：主要结论和数字
- *
- * Prompt 2: 方法深挖 + 审稿人模式提问
- *   - 方法详细拆解
- *   - 以审稿人视角提出质疑
- *   - 关键图表分析
- *
- * Prompt 3: 第一性原理理论框架 + 有效性分析 + 下一步
- *   - 从第一性原理构建理论框架
- *   - 分析方法的有效性边界
- *   - 探索改进方向和下一步
- */
+const PAPER_PASS_1_PROMPT = `你是一位专业的学术论文阅读助手。这是第一轮阅读（快速概览）。
 
-const PAPER_PASS_1_PROMPT = `你是一位资深的学术论文阅读专家。请在3分钟内快速完成对这篇论文的概览。
-
-## 任务：三分钟综述
-
-快速阅读标题、摘要、引言第一段、结论，以及扫描章节标题和关键图表标题。
+## 任务
+1. 读取标题、摘要、引言
+2. 扫描章节标题（不读内容）
+3. 读结论
+4. 扫描参考文献
 
 ## 输出要求
 - 只输出JSON代码块，不要包含任何开场白或说明性文字
-- 简洁精准，每项不超过2句话
+- 不要说"我已完成..."之类的话
+- summary 字段用中文撰写，200-300字，概括论文的问题、方法、核心结果
 
 请直接按以下JSON格式输出：
 
@@ -67,252 +76,238 @@ const PAPER_PASS_1_PROMPT = `你是一位资深的学术论文阅读专家。请
   "title": "论文完整标题",
   "paper_type": "实证/理论/系统/综述",
   "venue": "发表venue（如果能识别）",
-  "has_code": true,
+  "has_code": true/false,
   "code_url": "https://github.com/... 或 null",
-
-  "三分钟综述": {
-    "领域": "研究属于什么领域？什么子方向？",
-    "问题": "论文要解决什么问题？为什么这个问题重要/困难？",
-    "贡献": "核心贡献是什么？（1-3点）",
-    "数据": "用了什么数据集/实验环境？规模如何？",
-    "结果": "主要结论是什么？关键数字（如准确率提升X%）"
-  },
-
-  "key_figures": [1, 3, 5],
+  "core_contribution": "用1-2句话概括核心贡献",
+  "summary": "200-300字的中文摘要，涵盖论文要解决的问题、采用的方法、主要实验结果和关键结论",
   "key_pages": "如 p3-5方法, p6-8实验",
-  "initial_verdict": "值得深入/快速跳过/待定，并说明原因"
+  "skip_pages": "如 p9-10附录, p2相关工作详细",
+  "key_figures": [1, 3, 5]
 }
 \`\`\``;
 
-const PAPER_PASS_2_PROMPT = `你是一位资深的学术论文审稿人。请深入分析这篇论文的方法，并以审稿人的严格视角提出质疑。
+const PAPER_PASS_2_PROMPT = `你是一位专业的学术论文阅读助手。这是第二轮阅读（内容理解）。
 
 ## 背景信息
 第一轮笔记：
 {previous_notes}
 
-## 任务：方法深挖 + 审稿人模式提问
-
-仔细阅读方法部分、实验部分和关键图表。以审稿人的批判性思维分析论文。
+## 任务
+聚焦阅读第一轮标记的关键页面，把握论文内容但不深入细节。
 
 ## 输出要求
-- 直接输出Markdown内容，不要包含任何开场白
+- 直接输出Markdown内容，不要包含任何开场白或说明性文字
 - 不要使用<details>或<summary>标签
-- **重要**: 必须为核心方法绘制清晰的架构图
+- 不要说"我已完成..."之类的话
+- **重要**: 必须为论文中的关键图表绘制可视化图，帮助读者理解
+
+${TEXT_FIGURE_RULES}
 
 请直接输出以下Markdown格式：
 
----
+### 核心问题
+[论文要解决什么问题？为什么这个问题重要？]
 
-## 方法深挖
+### 方法概述
+[用自己的话描述方法，不超过一段]
 
-### 方法拆解
+### 关键图表复现
 
-将论文方法分解为清晰的步骤：
+对于论文中每个重要的图表，请按以下格式输出其可视化复现：
 
-**Step 1: [步骤名称]**
-- 输入：[什么数据]
-- 操作：[具体做什么]
-- 输出：[产生什么]
+**Figure X: [图标题]**
 
-**Step 2: [步骤名称]**
-...
+[这个图说明了什么，1-2句话]
 
-### 核心技术图解
-
-\`\`\`mermaid
-flowchart TB
-    subgraph 输入["输入"]
-        A[原始数据]
-    end
-    subgraph 核心方法["核心方法"]
-        B[模块1]
-        C[模块2]
-        D[模块3]
-    end
-    subgraph 输出["输出"]
-        E[结果]
-    end
-    A --> B --> C --> D --> E
+使用ASCII字符画复现流程图/架构图：
+\`\`\`
+┌──────────┐     ┌──────────┐     ┌──────────┐
+│  Input   │────▶│ Process  │────▶│  Output  │
+└──────────┘     └──────────┘     └──────────┘
 \`\`\`
 
-### 关键设计选择
-- **为什么选择X而不是Y？** [分析]
-- **这个设计的trade-off是什么？** [分析]
+**Table Y: [表标题]**
 
----
+[这个表的关键发现]
 
-## 审稿人模式：批判性提问
-
-扮演一个严格的审稿人，对论文提出质疑：
-
-### 方法层面的质疑
-1. **[质疑1]**: [具体问题]
-   - 论文的回答/解释：[如果有]
-   - 我的评估：[是否充分]
-
-2. **[质疑2]**: [具体问题]
-   ...
-
-### 实验层面的质疑
-1. **基线选择是否合理？** [分析]
-2. **数据集是否有bias？** [分析]
-3. **评估指标是否全面？** [分析]
-
-### 论文未回答的问题
-- [ ] [问题1]
-- [ ] [问题2]
-- [ ] [问题3]
-
----
-
-## 实验结果分析
-
-### 主要实验结果
-
-复现关键结果表格：
+使用Markdown表格复现关键数据：
 | Method | Metric1 | Metric2 | Metric3 |
 |--------|---------|---------|---------|
-| Baseline1 | - | - | - |
-| Baseline2 | - | - | - |
-| **Ours** | **-** | **-** | **-** |
+| Baseline | 32.1 | 45.2 | 38.5 |
+| **Ours** | **45.3** | **58.7** | **51.2** |
 
-### 消融实验解读
-[每个消融实验说明了什么？哪个组件贡献最大？]
+### 方法流程图
 
-### 结果的可信度评估
-- [ ] 是否有多次运行的variance报告？
-- [ ] 是否有统计显著性检验？
-- [ ] 实验规模是否足够？`;
+使用ASCII字符画绘制论文核心方法的流程：
 
-const PAPER_PASS_3_PROMPT = `你是一位追求第一性原理的理论研究者。请从基础原理出发，构建对这篇论文的深度理解。
+\`\`\`
+┌──────────┐
+│ Raw Input│
+└────┬─────┘
+     ▼
+┌──────────┐     ┌──────────┐     ┌──────────┐
+│  Step 1  │────▶│  Step 2  │────▶│  Step 3  │
+└──────────┘     └──────────┘     └────┬─────┘
+                                       ▼
+                                 ┌──────────┐
+                                 │  Output  │
+                                 └──────────┘
+\`\`\`
+
+### 实验设置
+- **数据集**: [名称和规模]
+- **基线方法**: [对比方法列表]
+- **评估指标**: [指标及其含义]
+
+### 主要结果
+[结果总结，关键数字，最好用表格呈现]
+
+### 存疑点
+- [ ] [不理解的点1]
+- [ ] [不理解的点2]
+
+### 待追读文献
+- [ ] [重要参考文献1] - [为什么重要]
+- [ ] [重要参考文献2] - [为什么重要]`;
+
+const PAPER_PASS_3_PROMPT = `你是一位专业的学术论文阅读助手。这是第三轮阅读（深度理解）。
 
 ## 背景信息
 之前的笔记：
 {previous_notes}
 
-## 任务：第一性原理分析 + 有效性边界 + 下一步
-
-从最基本的原理出发理解论文，分析方法的有效性边界，并思考改进方向。
+## 任务
+深入方法细节，构建数学框架，绘制详细的系统图。
 
 ## 输出要求
-- 直接输出Markdown内容，不要包含任何开场白
-- 数学公式使用 $...$ 或 $$...$$ 格式
+- 直接输出Markdown内容，不要包含任何开场白或说明性文字
 - 不要使用<details>或<summary>标签
+- 不要说"我已完成..."之类的话
+- 数学公式使用 $...$ 或 $$...$$ 格式
+- **重要**: 必须绘制多个详细的架构图来帮助读者理解论文
+
+${TEXT_FIGURE_RULES}
 
 请直接输出以下Markdown格式：
 
 ---
 
-## 第一性原理分析
+## 深度解析
 
-### 从第一性原理看问题
-
-**问题的本质是什么？**
-[不用论文的术语，用最基础的语言描述问题]
-
-**为什么这个问题困难？**
-[从信息论/计算复杂度/统计学习等基础理论分析]
-
-### 理论框架构建
+### 数学框架
 
 **问题形式化**
 
-设 $\\mathcal{X}$ 为输入空间，$\\mathcal{Y}$ 为输出空间...
+设输入空间 $\\mathcal{X}$，输出空间 $\\mathcal{Y}$，目标是学习映射...
+[具体问题定义]
+
+**关键公式**
 
 $$
-[核心目标函数或优化问题]
+[核心公式，使用 LaTeX 格式]
 $$
 
-**论文方法的本质**
+公式解读：[逐项解释公式中的符号含义]
 
-[用一句话概括：论文本质上是在做什么？]
+### 系统架构总览
 
-**方法的理论依据**
+使用ASCII字符画绘制论文的整体系统架构：
 
-论文方法有效的前提假设是：
-1. [假设1]
-2. [假设2]
-
-这些假设对应的理论依据是...
-
----
-
-## 有效性分析
-
-### 方法在什么条件下有效？
-
-\`\`\`mermaid
-graph LR
-    subgraph 有效条件
-        A[条件1: ...]
-        B[条件2: ...]
-        C[条件3: ...]
-    end
-    subgraph 失效场景
-        D[场景1: ...]
-        E[场景2: ...]
-    end
+\`\`\`
+┌─────────────────────────────────────────────────┐
+│                  System Overview                 │
+├─────────────────────────────────────────────────┤
+│                                                  │
+│  ┌──────────┐                                    │
+│  │  Input   │                                    │
+│  └────┬─────┘                                    │
+│       ▼                                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐       │
+│  │ Module 1 │─▶│ Module 2 │─▶│ Module 3 │       │
+│  └──────────┘  └──────────┘  └────┬─────┘       │
+│       :                           ▼              │
+│       ·····················▶┌──────────┐         │
+│                             │  Output  │         │
+│                             └──────────┘         │
+└─────────────────────────────────────────────────┘
 \`\`\`
 
-### 有效性边界
+### 核心算法流程
 
-| 维度 | 有效区间 | 边界情况 | 完全失效 |
-|------|----------|----------|----------|
-| 数据规模 | - | - | - |
-| 数据分布 | - | - | - |
-| 计算资源 | - | - | - |
-| 场景复杂度 | - | - | - |
+使用ASCII字符画绘制核心算法的详细步骤：
 
-### 与其他方法的理论对比
-
-**方法A vs 本文方法**
-- 假设差异：[...]
-- 适用场景差异：[...]
-- 理论保证差异：[...]
-
----
-
-## 下一步：改进方向
-
-### 短期改进（工程优化）
-1. **[改进点1]**: [具体建议]
-2. **[改进点2]**: [具体建议]
-
-### 中期改进（方法增强）
-1. **[研究方向1]**: [为什么值得探索]
-2. **[研究方向2]**: [为什么值得探索]
-
-### 长期愿景（理论突破）
-[如果解决了什么理论问题，这个领域会有质的飞跃？]
-
-### 我的研究启发
-
-基于这篇论文，对我自己研究的启发：
-- [启发1]
-- [启发2]
-
----
-
-## 总结
-
-### 一句话总结
-[用一句话概括论文：谁用什么方法解决了什么问题，核心idea是什么]
-
-### 论文定位图
-
-\`\`\`mermaid
-graph TB
-    subgraph 领域图谱
-        A[传统方法] --> B[论文方法]
-        B --> C[可能的未来]
-        D[相关方向1] -.-> B
-        E[相关方向2] -.-> B
-    end
+\`\`\`
+  ┌─────────┐
+  │  Start  │
+  └────┬────┘
+       ▼
+  ┌──────────────┐
+  │ Step 1: Desc │
+  └──────┬───────┘
+         ▼
+  ┌──────────────┐
+  │ Step 2: Desc │
+  └──────┬───────┘
+         ▼
+    ┌─────────┐
+    │Condition│
+    └──┬───┬──┘
+   Yes │   │ No
+       ▼   ▼
+  ┌──────┐ ┌──────┐
+  │Brch A│ │Brch B│
+  └──┬───┘ └──┬───┘
+     └────┬───┘
+          ▼
+     ┌─────────┐
+     │  Merge  │
+     └────┬────┘
+          ▼
+     ┌─────────┐
+     │   End   │
+     └─────────┘
 \`\`\`
 
-### 值得关注的后续论文
-- [ ] [论文1] - [关注原因]
-- [ ] [论文2] - [关注原因]`;
+### 数据流图
+
+展示数据在系统中的流动过程：
+
+\`\`\`
+[ Data Preprocessing ]          [ Model Processing ]          [ Post-processing ]
+┌──────┐  ┌────────┐  ┌────────┐  ┌─────────┐  ┌────────┐  ┌─────────┐  ┌────────┐
+│ Raw  │─▶│ Clean  │─▶│Feature │─▶│ Encoder │─▶│  Core  │─▶│ Decoder │─▶│ Output │
+│ Data │  │        │  │Extract │  │         │  │Compute │  │         │  │        │
+└──────┘  └────────┘  └────────┘  └─────────┘  └────────┘  └─────────┘  └────────┘
+\`\`\`
+
+### 方法深度解析
+
+[详细方法描述，每个组件的作用，关键设计选择]
+
+### 创新点分析
+
+1. **[创新点1]**: [意义和价值]
+2. **[创新点2]**: [意义和价值]
+
+### 局限性与假设
+
+- **隐含假设**: [论文未明说但必须成立的假设]
+- **适用范围**: [方法在什么条件下有效]
+- **潜在问题**: [可能的失效场景]
+
+### 相关工作对比
+
+- **[相关工作1]**: [区别和联系]
+- **[相关工作2]**: [区别和联系]
+
+### 未来工作想法
+
+1. [想法1]
+2. [想法2]
+
+### 核心流程总结
+
+用一段文字描述论文的核心流程：从输入到输出，经过哪些关键步骤，每步做什么。`;
 
 // ============== PROMPT FOR CODE ANALYSIS (SINGLE ROUND) ==============
 
@@ -408,7 +403,7 @@ class AutoReaderService {
       const pass3Result = await this.executePass(tempFilePath, pass3Prompt, notesFilePath, 3);
       await this.appendToNotesFile(notesFilePath, '\n\n' + cleanLLMResponse(pass3Result.text));
 
-      // Step 5: Generate final paper notes (Mermaid diagrams render natively in markdown)
+      // Step 5: Generate final paper notes
       let finalNotes = await fs.readFile(notesFilePath, 'utf-8');
 
       // Step 8: If has code, fetch README and summarize it (non-fatal)
@@ -456,7 +451,96 @@ class AutoReaderService {
   }
 
   /**
-   * Parse pass 1 JSON result (new 3-stage format)
+   * Process document in v2 mode: same 3-pass reading with text figures (no mermaid)
+   */
+  async processDocumentV2(item, options = {}) {
+    const { documentId, s3Key, title, analysisProvider } = item;
+    let providedCodeUrl = item.codeUrl;
+    let tempFilePath = null;
+    const notesFilePath = path.join(this.processingDir, `${documentId}_notes.md`);
+    this._currentProvider = this._resolveProvider(analysisProvider);
+
+    try {
+      await this.ensureProcessingDir();
+      console.log(`[AutoReaderV2] Starting multi-pass processing: ${title} (ID: ${documentId})`);
+
+      // Step 1: Prepare PDF
+      const pdfInfo = await pdfService.preparePdfForProcessing(s3Key);
+      tempFilePath = pdfInfo.filePath;
+      console.log(`[AutoReaderV2] PDF prepared: ${pdfInfo.pageCount} pages`);
+
+      // Initialize notes file
+      await this.initNotesFile(notesFilePath, title, documentId);
+
+      // Step 2: Pass 1
+      console.log('[AutoReaderV2] === 第一轮：快速概览 ===');
+      const pass1Result = await this.executePass(tempFilePath, PAPER_PASS_1_PROMPT, notesFilePath, 1);
+      const pass1Data = this.parsePass1Result(pass1Result.text);
+      await this.appendPass1Notes(notesFilePath, pass1Data, pass1Result.text);
+
+      let hasCode = pass1Data.has_code || !!providedCodeUrl;
+      let codeUrl = pass1Data.code_url || providedCodeUrl;
+
+      // Step 3: Pass 2
+      console.log('[AutoReaderV2] === 第二轮：内容理解 ===');
+      const currentNotes = await fs.readFile(notesFilePath, 'utf-8');
+      const pass2Prompt = PAPER_PASS_2_PROMPT.replace('{previous_notes}', currentNotes);
+      const pass2Result = await this.executePass(tempFilePath, pass2Prompt, notesFilePath, 2);
+      await this.appendToNotesFile(notesFilePath, '\n\n---\n\n## 第二轮笔记\n\n' + cleanLLMResponse(pass2Result.text));
+
+      // Step 4: Pass 3
+      console.log('[AutoReaderV2] === 第三轮：深度理解 ===');
+      const updatedNotes = await fs.readFile(notesFilePath, 'utf-8');
+      const pass3Prompt = PAPER_PASS_3_PROMPT.replace('{previous_notes}', updatedNotes);
+      const pass3Result = await this.executePass(tempFilePath, pass3Prompt, notesFilePath, 3);
+      await this.appendToNotesFile(notesFilePath, '\n\n' + cleanLLMResponse(pass3Result.text));
+
+      let finalNotes = await fs.readFile(notesFilePath, 'utf-8');
+
+      // Step 5: Fetch README if has code
+      if (hasCode && codeUrl) {
+        console.log(`[AutoReaderV2] === 获取并摘要代码README: ${codeUrl} ===`);
+        try {
+          const codeReadme = await this.fetchGitHubReadme(codeUrl);
+          if (codeReadme) {
+            const readmeSummary = await this.summarizeReadme(codeReadme, codeUrl, title);
+            if (readmeSummary) {
+              finalNotes += '\n\n---\n\n## 代码仓库概览\n\n';
+              finalNotes += `**仓库地址**: [${codeUrl}](${codeUrl})\n\n`;
+              finalNotes += readmeSummary;
+              finalNotes += '\n\n*点击"代码分析"按钮获取详细的代码解读*\n';
+            }
+          }
+        } catch (readmeError) {
+          console.log(`[AutoReaderV2] README processing failed (non-fatal):`, readmeError.message);
+        }
+      }
+
+      // Step 7: Upload notes to S3
+      const paperNotesS3Key = await this.uploadNotesToS3(finalNotes, documentId, title, 'paper_notes');
+      console.log(`[AutoReaderV2] Paper notes uploaded to S3: ${paperNotesS3Key}`);
+      console.log(`[AutoReaderV2] Processing complete for: ${title}`);
+
+      return {
+        notesS3Key: paperNotesS3Key,
+        codeNotesS3Key: null,
+        pageCount: pdfInfo.pageCount,
+        hasCode,
+        codeUrl,
+        readerMode: 'auto_reader_v2',
+      };
+    } finally {
+      if (tempFilePath) {
+        await pdfService.cleanupTmpFile(tempFilePath);
+      }
+      try {
+        await fs.unlink(notesFilePath);
+      } catch (e) { /* ignore */ }
+    }
+  }
+
+  /**
+   * Parse pass 1 JSON result
    */
   parsePass1Result(text) {
     try {
@@ -473,56 +557,39 @@ class AutoReaderService {
       venue: '未知',
       has_code: false,
       code_url: null,
-      '三分钟综述': {
-        '领域': '',
-        '问题': '',
-        '贡献': '',
-        '数据': '',
-        '结果': '',
-      },
-      key_figures: [],
+      core_contribution: '',
       key_pages: '',
-      initial_verdict: '',
+      skip_pages: '',
+      key_figures: [],
+      five_c: {
+        category: '',
+        context: '',
+        correctness: '',
+        contributions: '',
+        clarity: '',
+      },
+      initial_impression: '',
     };
   }
 
   /**
-   * Append pass 1 notes in new 3-stage template format
+   * Append pass 1 notes in template format
    */
   async appendPass1Notes(filePath, data, rawText) {
-    const summary = data['三分钟综述'] || {};
     const notes = `
 ## 概览
 
 - **类型**: ${data.paper_type || '未知'} | ${data.venue || ''}
 - **代码**: ${data.has_code ? `[${data.code_url || '有'}](${data.code_url || '#'})` : '无'}
 - **关键图表**: ${data.key_figures?.length > 0 ? 'Figure ' + data.key_figures.join(', ') : '待分析'}
-- **重点页面**: ${data.key_pages || ''}
 
----
+### 核心贡献
 
-## 三分钟综述
+${data.core_contribution || ''}
 
-### 领域
-${summary['领域'] || ''}
+### 论文摘要
 
-### 问题
-${summary['问题'] || ''}
-
-### 贡献
-${summary['贡献'] || ''}
-
-### 数据
-${summary['数据'] || ''}
-
-### 结果
-${summary['结果'] || ''}
-
----
-
-### 初步判断
-
-${data.initial_verdict || ''}
+${data.summary || ''}
 
 `;
     await this.appendToNotesFile(filePath, notes);

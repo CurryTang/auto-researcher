@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import MarkdownContent from './shared/MarkdownRenderer';
 import MarkdownEditor from './MarkdownEditor';
 
-function UserNotesModal({ document, apiUrl, onClose, isAuthenticated, getAuthHeaders }) {
+function UserNotesModal({ document, apiUrl, onClose, isAuthenticated, getAuthHeaders, onViewAiNotes }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -180,6 +180,20 @@ function UserNotesModal({ document, apiUrl, onClose, isAuthenticated, getAuthHea
             </button>
           </div>
         </div>
+
+        {onViewAiNotes && (
+          <div className="notes-tabs">
+            <button
+              className="notes-tab"
+              onClick={() => onViewAiNotes(document)}
+            >
+              Paper Notes
+            </button>
+            <button className="notes-tab active user-notes-tab">
+              User Notes
+            </button>
+          </div>
+        )}
 
         <div className="notes-modal-content">
           {loading && (

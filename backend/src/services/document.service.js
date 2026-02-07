@@ -1,6 +1,45 @@
 const { getDb } = require('../db');
 const s3Service = require('./s3.service');
 
+const DOCUMENTS_QUERY_TIMEOUT_MS = parseInt(process.env.DOCUMENTS_QUERY_TIMEOUT_MS || '8000', 10);
+const DOCUMENTS_QUERY_RETRIES = parseInt(process.env.DOCUMENTS_QUERY_RETRIES || '1', 10);
+
+function createTimeoutError(label, timeoutMs) {
+  const error = new Error(`${label} timed out after ${timeoutMs}ms`);
+  error.code = 'ETIMEDOUT';
+  return error;
+}
+
+async function executeWithTimeoutAndRetry(db, query, options = {}) {
+  const {
+    timeoutMs = DOCUMENTS_QUERY_TIMEOUT_MS,
+    retries = DOCUMENTS_QUERY_RETRIES,
+    label = 'db.query',
+  } = options;
+
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let timeoutId;
+    try {
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(createTimeoutError(label, timeoutMs)), timeoutMs);
+      });
+      return await Promise.race([db.execute(query), timeoutPromise]);
+    } catch (error) {
+      lastError = error;
+      const isTimeout = error.code === 'ETIMEDOUT';
+      if (!isTimeout || attempt === retries) {
+        throw error;
+      }
+      console.warn(`[DocumentService] ${label} timeout (attempt ${attempt + 1}/${retries + 1}), retrying...`);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  throw lastError;
+}
+
 /**
  * Convert database row to document object
  */
@@ -30,7 +69,7 @@ function rowToDocument(row) {
     // Read status
     isRead: row.is_read === 1,
     // Auto-reader mode fields
-    readerMode: row.reader_mode || 'auto_reader',
+    readerMode: row.reader_mode || 'auto_reader_v2',
     codeNotesS3Key: row.code_notes_s3_key,
     hasCode: row.has_code === 1,
     codeUrl: row.code_url,
@@ -64,7 +103,7 @@ async function createDocument(data) {
       tags,
       data.notes || null,
       data.userId || 'default_user',
-      data.readerMode || 'auto_reader',  // Default to auto_reader mode
+      data.readerMode || 'auto_reader_v2',  // Default to auto_reader_v2 mode
       data.analysisProvider || 'gemini-cli',  // Default to gemini-cli
     ],
   });
@@ -79,15 +118,23 @@ async function createDocument(data) {
  * @param {Object} pagination - Pagination options (supports page or offset)
  * @returns {Promise<{documents: Object[], total: number, page: number, totalPages: number}>}
  */
-async function getDocuments(filters = {}, pagination = {}) {
+async function getDocuments(filters = {}, pagination = {}, sortOptions = {}, options = {}) {
   const db = getDb();
-  const { userId = 'default_user', type, search, tags } = filters;
+  const { userId = 'default_user', type, search, tags, readFilter } = filters;
   const { page = 1, limit = 20 } = pagination;
+  const { includeTotal = false } = options;
+
+  // Resolve sort column and direction
+  const allowedSorts = { createdAt: 'created_at', title: 'title' };
+  const sortCol = allowedSorts[sortOptions.sort] || 'created_at';
+  const sortDir = sortOptions.order === 'asc' ? 'ASC' : 'DESC';
 
   // Support both page-based and offset-based pagination
-  const offset = pagination.offset !== undefined
+  const rawOffset = pagination.offset !== undefined
     ? pagination.offset
     : (page - 1) * limit;
+  const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 100) : 20;
+  const safeOffset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
   let whereClauses = ['user_id = ?'];
   let args = [userId];
@@ -108,28 +155,56 @@ async function getDocuments(filters = {}, pagination = {}) {
     tags.forEach(tag => args.push(`%"${tag}"%`));
   }
 
+  if (readFilter === 'unread') {
+    whereClauses.push('is_read = 0');
+  } else if (readFilter === 'read') {
+    whereClauses.push('is_read = 1');
+  }
+
   const whereClause = whereClauses.join(' AND ');
 
-  // Get total count
-  const countResult = await db.execute({
-    sql: `SELECT COUNT(*) as count FROM documents WHERE ${whereClause}`,
-    args: args,
-  });
-  const total = Number(countResult.rows[0].count);
+  // Query one extra row so callers can determine if more data exists without
+  // always forcing a costly COUNT(*).
+  const result = await executeWithTimeoutAndRetry(db, {
+    sql: `SELECT id, title, type, original_url, tags, user_id, created_at, updated_at, processing_status, is_read, reader_mode, has_code, code_url, code_analysis_status, analysis_provider
+          FROM documents
+          WHERE ${whereClause}
+          ORDER BY ${sortCol} ${sortDir}
+          LIMIT ? OFFSET ?`,
+    args: [...args, safeLimit + 1, safeOffset],
+  }, { label: 'documents.list' });
 
-  // Get documents
-  const result = await db.execute({
-    sql: `SELECT id, title, type, original_url, s3_key, s3_url, file_size, mime_type, tags, user_id, created_at, updated_at, processing_status, notes_s3_key, page_count, processing_error, processing_started_at, processing_completed_at, is_read, reader_mode, code_notes_s3_key, has_code, code_url, code_analysis_status, analysis_provider FROM documents WHERE ${whereClause} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-    args: [...args, limit, offset],
-  });
+  const hasMore = result.rows.length > safeLimit;
+  const rows = hasMore ? result.rows.slice(0, safeLimit) : result.rows;
+  const documents = rows.map(rowToDocument);
 
-  const documents = result.rows.map(rowToDocument);
+  // Return an estimate by default; optionally compute exact total when requested.
+  let total = safeOffset + documents.length + (hasMore ? 1 : 0);
+  let totalExact = false;
+  if (includeTotal) {
+    try {
+      const countResult = await executeWithTimeoutAndRetry(db, {
+        sql: `SELECT COUNT(*) as count FROM documents WHERE ${whereClause}`,
+        args,
+      }, {
+        timeoutMs: Math.min(DOCUMENTS_QUERY_TIMEOUT_MS, 4000),
+        retries: 0,
+        label: 'documents.count',
+      });
+      total = Number(countResult.rows[0].count);
+      totalExact = true;
+    } catch (error) {
+      console.warn(`[DocumentService] documents.count failed, using estimated total: ${error.message}`);
+    }
+  }
 
   return {
     documents,
     total,
+    totalExact,
+    hasMore,
     page,
-    totalPages: Math.ceil(total / limit),
+    totalPages: Math.ceil(total / safeLimit),
   };
 }
 

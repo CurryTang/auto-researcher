@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import DocumentList from './components/DocumentList';
 import NotesModal from './components/NotesModal';
@@ -6,8 +6,30 @@ import UserNotesModal from './components/UserNotesModal';
 import LoginModal from './components/LoginModal';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-// API URL - in dev, use vite proxy to avoid CORS/SSL issues; in prod, use direct URL
-const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? '/api' : 'https://auto-reader.duckdns.org/api');
+// API URL strategy:
+// - Development: always prefer local Vite proxy (/api) unless explicitly overridden
+//   with VITE_DEV_API_URL.
+// - Production: use VITE_API_URL when provided, otherwise default public endpoint.
+const DEV_API_URL = import.meta.env.VITE_DEV_API_URL || '/api';
+const PROD_API_URL = import.meta.env.VITE_API_URL || 'https://auto-reader.duckdns.org/api';
+const API_URL = import.meta.env.DEV ? DEV_API_URL : PROD_API_URL;
+const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 15000);
+
+function getApiErrorMessage(err, fallback) {
+  if (err?.response?.status === 500) {
+    return 'Backend API unavailable. Start backend with: cd backend && npm run dev';
+  }
+  if (err?.response?.status === 504) {
+    return 'Backend query timed out. Retry in a few seconds.';
+  }
+  if (err?.code === 'ECONNABORTED') {
+    return `Request timed out after ${Math.round(API_TIMEOUT_MS / 1000)}s. Please retry.`;
+  }
+  if (err?.message?.includes('Network Error')) {
+    return 'Cannot connect to backend API.';
+  }
+  return err?.response?.data?.error || err?.response?.data?.message || err?.message || fallback;
+}
 
 function AppContent() {
   const [documents, setDocuments] = useState([]);
@@ -19,98 +41,108 @@ function AppContent() {
   const [initialNotesTab, setInitialNotesTab] = useState('paper');
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [userNotesDocument, setUserNotesDocument] = useState(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [allTags, setAllTags] = useState([]);
   const [selectedTag, setSelectedTag] = useState(null);
-  const [readFilter, setReadFilter] = useState('all'); // 'all', 'unread', 'read'
+  const [readFilter, setReadFilter] = useState('unread'); // 'all', 'unread', 'read'
+  const [sortOrder, setSortOrder] = useState('newest'); // 'newest', 'oldest', 'alpha'
   const [showFilters, setShowFilters] = useState(false);
 
   const { isAuthenticated, isLoading: authLoading, logout, getAuthHeaders } = useAuth();
 
   const LIMIT = 10;
 
-  // Fetch documents with pagination
-  const fetchDocuments = async (reset = false) => {
-    if (loading) return;
+  // Debounced search value
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debounceTimer = useRef(null);
+
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(debounceTimer.current);
+  }, [searchQuery]);
+
+  // Build API params from current filter state
+  const buildParams = (offsetVal) => {
+    const apiSort = sortOrder === 'alpha' ? 'title' : 'createdAt';
+    const apiOrder = sortOrder === 'oldest' ? 'asc' : (sortOrder === 'alpha' ? 'asc' : 'desc');
+    const params = { limit: LIMIT, offset: offsetVal, sort: apiSort, order: apiOrder };
+    if (debouncedSearch) params.search = debouncedSearch;
+    if (readFilter !== 'all') params.readFilter = readFilter;
+    if (selectedTag) params.tags = selectedTag;
+    return params;
+  };
+
+  // Fetch docs on mount and when any server-side filter changes
+  const fetchIdRef = useRef(0);
+
+  useEffect(() => {
+    const id = ++fetchIdRef.current;
     setLoading(true);
     setError(null);
 
-    const currentOffset = reset ? 0 : offset;
+    axios.get(`${API_URL}/documents`, {
+      params: buildParams(0),
+      timeout: API_TIMEOUT_MS,
+    })
+      .then(response => {
+        if (fetchIdRef.current !== id) return; // stale request
+        const { documents: newDocs = [], hasMore: apiHasMore } = response.data;
+        setDocuments(newDocs);
+        setOffset(newDocs.length);
+        setHasMore(typeof apiHasMore === 'boolean' ? apiHasMore : newDocs.length === LIMIT);
+      })
+      .catch(err => {
+        if (fetchIdRef.current !== id) return;
+        console.error('Failed to fetch documents:', err);
+        setError(getApiErrorMessage(err, 'Failed to fetch documents'));
+      })
+      .finally(() => {
+        if (fetchIdRef.current === id) setLoading(false);
+      });
+  }, [sortOrder, debouncedSearch, readFilter, selectedTag, refreshTrigger]);
 
+  // Load more (append)
+  const loadMore = async () => {
+    if (loading) return;
+    setLoading(true);
     try {
       const response = await axios.get(`${API_URL}/documents`, {
-        params: {
-          limit: LIMIT,
-          offset: currentOffset,
-          sort: 'createdAt',
-          order: 'desc',
-        },
+        params: buildParams(offset),
+        timeout: API_TIMEOUT_MS,
       });
-
-      const { documents: newDocs } = response.data;
-
-      // Filter out failed documents
-      const filteredDocs = newDocs.filter(doc => doc.processingStatus !== 'failed');
-
-      if (reset) {
-        setDocuments(filteredDocs);
-        setOffset(LIMIT);
-      } else {
-        setDocuments((prev) => [...prev, ...filteredDocs]);
-        setOffset((prev) => prev + LIMIT);
-      }
-
-      // Check if there are more documents to load
-      setHasMore(newDocs.length === LIMIT);
+      const { documents: newDocs = [], hasMore: apiHasMore } = response.data;
+      setDocuments(prev => [...prev, ...newDocs]);
+      setOffset(prev => prev + newDocs.length);
+      setHasMore(typeof apiHasMore === 'boolean' ? apiHasMore : newDocs.length === LIMIT);
     } catch (err) {
-      console.error('Failed to fetch documents:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to fetch documents');
+      console.error('Failed to load more:', err);
+      setError(getApiErrorMessage(err, 'Failed to load more'));
     } finally {
       setLoading(false);
     }
   };
 
-  // Initial fetch
-  useEffect(() => {
-    fetchDocuments(true);
-    fetchTags();
-  }, []);
+  // Fetch tags once on mount
+  useEffect(() => { fetchTags(); }, []);
 
   // Fetch available tags
   const fetchTags = async () => {
     try {
-      const response = await axios.get(`${API_URL}/tags`);
+      const response = await axios.get(`${API_URL}/tags`, { timeout: API_TIMEOUT_MS });
       setAllTags(response.data.tags || []);
     } catch (err) {
       console.error('Failed to fetch tags:', err);
     }
   };
 
-  // Filter and sort documents
-  const filteredDocuments = documents
-    .filter((doc) => {
-      // Filter by search query
-      const matchesSearch = !searchQuery ||
-        doc.title.toLowerCase().includes(searchQuery.toLowerCase());
-
-      // Filter by tag
-      const matchesTag = !selectedTag ||
-        (doc.tags && doc.tags.includes(selectedTag));
-
-      // Filter by read status
-      const matchesReadFilter = readFilter === 'all' ||
-        (readFilter === 'unread' && !doc.isRead) ||
-        (readFilter === 'read' && doc.isRead);
-
-      return matchesSearch && matchesTag && matchesReadFilter;
-    })
-    // Sort: unread first, then by date
-    .sort((a, b) => {
-      if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
-      return new Date(b.createdAt) - new Date(a.createdAt);
-    });
+  // Documents are already filtered and sorted by the backend
+  const filteredDocuments = documents;
 
   // Get download URL for a document
   const getDownloadUrl = async (document) => {
@@ -332,6 +364,29 @@ function AppContent() {
               ))}
             </div>
           </div>
+          <div className="sort-filter">
+            <span className="filter-label">Sort:</span>
+            <div className="sort-chips">
+              <button
+                className={`tag-chip ${sortOrder === 'newest' ? 'active' : ''}`}
+                onClick={() => setSortOrder('newest')}
+              >
+                Newest first
+              </button>
+              <button
+                className={`tag-chip ${sortOrder === 'oldest' ? 'active' : ''}`}
+                onClick={() => setSortOrder('oldest')}
+              >
+                Oldest first
+              </button>
+              <button
+                className={`tag-chip ${sortOrder === 'alpha' ? 'active' : ''}`}
+                onClick={() => setSortOrder('alpha')}
+              >
+                A-Z
+              </button>
+            </div>
+          </div>
           {(searchQuery || selectedTag || readFilter !== 'all') && (
             <div className="active-filters">
               <span className="filter-count">
@@ -356,7 +411,7 @@ function AppContent() {
         {error && (
           <div className="error-banner">
             <span>{error}</span>
-            <button onClick={() => fetchDocuments(true)}>Retry</button>
+            <button onClick={() => setRefreshTrigger((prev) => prev + 1)}>Retry</button>
           </div>
         )}
 
@@ -375,11 +430,11 @@ function AppContent() {
           isAuthenticated={isAuthenticated}
         />
 
-        {documents.length > 0 && hasMore && !searchQuery && !selectedTag && (
+        {documents.length > 0 && hasMore && (
           <div className="load-more-container">
             <button
               className="load-more-btn"
-              onClick={() => fetchDocuments(false)}
+              onClick={loadMore}
               disabled={loading}
             >
               {loading ? 'Loading...' : 'Load More'}
@@ -387,7 +442,7 @@ function AppContent() {
           </div>
         )}
 
-        {documents.length > 0 && !hasMore && !searchQuery && !selectedTag && (
+        {documents.length > 0 && !hasMore && (
           <p className="end-message">You've reached the end</p>
         )}
 
@@ -441,6 +496,10 @@ function AppContent() {
           onClose={() => setUserNotesDocument(null)}
           isAuthenticated={isAuthenticated}
           getAuthHeaders={getAuthHeaders}
+          onViewAiNotes={(doc) => {
+            setUserNotesDocument(null);
+            setSelectedDocument(doc);
+          }}
         />
       )}
 

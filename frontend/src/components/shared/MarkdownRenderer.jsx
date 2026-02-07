@@ -30,6 +30,13 @@ function getMermaid() {
 export function preprocessMermaidCode(code) {
   if (!code) return code;
 
+  // Remove leading/trailing whitespace and normalize line endings
+  code = code.trim().replace(/\r\n/g, '\n');
+
+  // Remove empty lines at the start (after diagram type declaration)
+  code = code.replace(/^(\w[\w-]*(?:\s+\w+)*)\n\n+/m, '$1\n');
+
+  // Fix subgraph names with special characters — quote them
   code = code.replace(/^(\s*subgraph\s+)([^"'\[\n]+?)(\s*)$/gm, (match, prefix, name, suffix) => {
     const trimmedName = name.trim();
     if (/^\w+$/.test(trimmedName)) return match;
@@ -38,26 +45,57 @@ export function preprocessMermaidCode(code) {
     return `${prefix}"${trimmedName}"${suffix}`;
   });
 
+  // Fix node labels in square brackets — quote labels with spaces or non-ASCII
   code = code.replace(/^(\s*)(\w+)\[([^\]"]+)\]/gm, (match, indent, nodeId, label) => {
-    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
-      return `${indent}${nodeId}["${label}"]`;
+    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label) || /[(){}#&;]/.test(label)) {
+      return `${indent}${nodeId}["${label.replace(/"/g, '#quot;')}"]`;
     }
     return match;
   });
 
+  // Fix node labels in round brackets (stadium shape)
+  code = code.replace(/^(\s*)(\w+)\(([^()"]+)\)(?!\()/gm, (match, indent, nodeId, label) => {
+    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
+      return `${indent}${nodeId}("${label.replace(/"/g, '#quot;')}")`;
+    }
+    return match;
+  });
+
+  // Fix node labels in double round brackets (circle shape)
   code = code.replace(/^(\s*)(\w+)\(\(([^)"]+)\)\)/gm, (match, indent, nodeId, label) => {
     if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
-      return `${indent}${nodeId}(("${label}"))`;
+      return `${indent}${nodeId}(("${label.replace(/"/g, '#quot;')}"))`;
     }
     return match;
   });
 
+  // Fix node labels in curly braces (rhombus/diamond shape)
+  code = code.replace(/^(\s*)(\w+)\{([^}"]+)\}/gm, (match, indent, nodeId, label) => {
+    if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
+      return `${indent}${nodeId}{"${label.replace(/"/g, '#quot;')}"}`;
+    }
+    return match;
+  });
+
+  // Fix edge labels — quote labels with spaces or non-ASCII
   code = code.replace(/\|([^|"]+)\|/g, (match, label) => {
     if (/\s/.test(label) || /[^\x00-\x7F]/.test(label)) {
       return `|"${label}"|`;
     }
     return match;
   });
+
+  // Fix arrow syntax: normalize various arrow styles
+  // e.g., "-- >" to "-->" , "- ->" to "-->"
+  code = code.replace(/--\s*>/g, '-->');
+  code = code.replace(/-\s->/g, '-->');
+  code = code.replace(/==\s*>/g, '==>');
+
+  // Remove trailing semicolons on lines (common LLM mistake)
+  code = code.replace(/;\s*$/gm, '');
+
+  // Fix common "end;" to "end"
+  code = code.replace(/^(\s*end)\s*;/gm, '$1');
 
   return code;
 }
@@ -73,24 +111,32 @@ export function MermaidDiagram({ code }) {
     const renderDiagram = async () => {
       if (!code) return;
       setLoading(true);
-      const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
-      try {
-        const mermaid = await getMermaid();
-        const processedCode = preprocessMermaidCode(code);
-        const tempContainer = document.createElement('div');
-        tempContainer.style.display = 'none';
-        document.body.appendChild(tempContainer);
-        const { svg } = await mermaid.render(id, processedCode, tempContainer);
-        tempContainer.remove();
-        setSvg(svg);
-        setError(null);
-      } catch (err) {
-        console.error('Mermaid render error:', err);
-        setError(err.message);
-        document.querySelectorAll(`#d${id}, [id^="dmermaid-"]`).forEach(el => el.remove());
-      } finally {
-        setLoading(false);
+      const mermaid = await getMermaid();
+      const processedCode = preprocessMermaidCode(code);
+
+      // Try rendering, and on failure try with the original code too
+      const attempts = [processedCode, code];
+      for (let i = 0; i < attempts.length; i++) {
+        const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
+        try {
+          const tempContainer = document.createElement('div');
+          tempContainer.style.display = 'none';
+          document.body.appendChild(tempContainer);
+          const { svg } = await mermaid.render(id, attempts[i], tempContainer);
+          tempContainer.remove();
+          setSvg(svg);
+          setError(null);
+          setLoading(false);
+          return;
+        } catch (err) {
+          document.querySelectorAll(`#d${id}, [id^="dmermaid-"]`).forEach(el => el.remove());
+          if (i === attempts.length - 1) {
+            console.error('Mermaid render error:', err);
+            setError(err.message);
+          }
+        }
       }
+      setLoading(false);
     };
     renderDiagram();
   }, [code]);

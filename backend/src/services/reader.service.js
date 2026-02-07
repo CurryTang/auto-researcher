@@ -120,6 +120,11 @@ class ReaderService {
       return await autoReaderService.processDocument(item, options);
     }
 
+    if (mode === 'auto_reader_v2') {
+      console.log(`[Reader] Using auto_reader_v2 mode for: ${title}`);
+      return await autoReaderService.processDocumentV2(item, options);
+    }
+
     // Default: vanilla mode
     return await this.processVanilla(item, options);
   }
