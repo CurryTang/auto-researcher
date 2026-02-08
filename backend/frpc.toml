@@ -1,0 +1,31 @@
+# FRP Client Configuration (Desktop)
+# This runs on your desktop to connect to DO server
+
+serverAddr = "138.68.5.132"
+serverPort = 7000
+
+# Authentication token - MUST match server
+auth.method = "token"
+auth.token = "25a67825c095495919e63480d277a324b75a009fe2a2ee813da98f00a83a873e"
+
+# Logging
+log.to = "./frpc.log"
+log.level = "info"
+log.maxDays = 7
+
+# Expose local processing service to DO server
+[[proxies]]
+name = "llm-processing"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 3001
+remotePort = 7001
+
+# SSH tunnel for remote management from DO server
+# On DO: ssh jjoo1@127.0.0.1 -p 7002
+[[proxies]]
+name = "desktop-ssh"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 22
+remotePort = 7002
