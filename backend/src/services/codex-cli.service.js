@@ -43,6 +43,38 @@ async function isAvailable() {
  * @param {object} options - Additional options
  * @returns {Promise<{text: string, raw: object}>}
  */
+/**
+ * Strip Codex CLI session log from stdout.
+ * Codex exec outputs timestamped log lines, headers, thinking blocks,
+ * and tool-call traces before/around the actual LLM response.
+ */
+function stripCodexSessionLog(raw) {
+  if (!raw) return raw;
+  const lines = raw.split('\n');
+  const cleaned = [];
+  let inSessionHeader = false;
+
+  for (const line of lines) {
+    // Session header lines: "[2026-02-09T03:18:39] OpenAI Codex ..."
+    if (/^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\]/.test(line)) continue;
+    // Separator lines
+    if (/^-{6,}$/.test(line.trim())) {
+      inSessionHeader = !inSessionHeader;
+      continue;
+    }
+    // Inside header block (workdir, model, provider, etc.)
+    if (inSessionHeader) continue;
+    // Codex metadata lines
+    if (/^(workdir|model|provider|approval|sandbox|reasoning)[:=]/i.test(line.trim())) continue;
+    // Bold thinking headers from exec output
+    if (/^\*\*(Searching|Preparing|Confirming|Planning|Clarifying)/.test(line.trim())) continue;
+
+    cleaned.push(line);
+  }
+
+  return cleaned.join('\n').trim();
+}
+
 function runCodex(prompt, options = {}) {
   const codexPath = config.codexCli?.path || 'codex';
   const timeoutMs = options.timeout || DEFAULT_TIMEOUT_MS;
@@ -88,9 +120,10 @@ function runCodex(prompt, options = {}) {
             raw: parsed,
           });
         } catch {
-          // Not JSON, return as plain text
+          // Strip Codex session log noise from plain text output
+          const cleaned = stripCodexSessionLog(stdout);
           resolve({
-            text: stdout.trim(),
+            text: cleaned,
             raw: null,
           });
         }
@@ -122,24 +155,56 @@ function runCodex(prompt, options = {}) {
 }
 
 /**
+ * Extract text from a PDF file using pdf-parse (lazy-loaded to avoid
+ * crashing on import if pdfjs-dist requires a newer Node version).
+ * @param {string} filePath - Path to the PDF file
+ * @returns {Promise<string>} - Extracted text
+ */
+async function extractPdfText(filePath) {
+  const pdfParse = require('pdf-parse');
+  const buffer = await fs.readFile(filePath);
+  const data = await pdfParse(buffer);
+  return data.text;
+}
+
+/**
  * Read a document using Codex CLI
+ * Codex CLI cannot read PDFs natively (unlike Gemini CLI which has @file support),
+ * so we extract the text from the PDF and embed it in the prompt.
  * @param {string} filePath - Path to the PDF file
  * @param {string} prompt - The prompt to use
  * @param {object} options - Additional options
  * @returns {Promise<{text: string, raw: object}>}
  */
 async function readDocument(filePath, prompt, options = {}) {
-  // Read the file and include its content in the prompt
-  // Codex doesn't support @ file attachment like Gemini, so we read and embed
   let fileContent = '';
-  try {
-    fileContent = await fs.readFile(filePath, 'utf-8');
-  } catch {
-    // If we can't read as text (e.g. PDF binary), note it in prompt
-    fileContent = `[Binary file at: ${filePath}]`;
+
+  if (filePath.toLowerCase().endsWith('.pdf')) {
+    // Extract text from PDF since Codex can't read binary files
+    try {
+      fileContent = await extractPdfText(filePath);
+      console.log(`[Codex CLI] Extracted ${fileContent.length} chars from PDF`);
+    } catch (err) {
+      console.error(`[Codex CLI] PDF text extraction failed: ${err.message}`);
+      throw new Error(`Cannot extract text from PDF for Codex CLI: ${err.message}`);
+    }
+  } else {
+    // For non-PDF files, read as text
+    try {
+      fileContent = await fs.readFile(filePath, 'utf-8');
+    } catch {
+      throw new Error(`Cannot read file: ${filePath}`);
+    }
   }
 
-  const fullPrompt = `${prompt}\n\nDocument file path: ${filePath}\n\nPlease read and analyze the file at the path above.`;
+  // Truncate if too long (Codex has prompt limits)
+  const maxContentChars = 120000;
+  if (fileContent.length > maxContentChars) {
+    fileContent = fileContent.substring(0, maxContentChars) + '\n\n... (content truncated)';
+    console.log(`[Codex CLI] Content truncated to ${maxContentChars} chars`);
+  }
+
+  const fullPrompt = `${prompt}\n\n---\n\nDocument content:\n\n${fileContent}`;
   return runCodex(fullPrompt, options);
 }
 
