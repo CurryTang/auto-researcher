@@ -486,6 +486,16 @@ function AppContent() {
             setSelectedDocument(null);
             setUserNotesDocument(doc);
           }}
+          onDocumentUpdate={(updatedDoc) => {
+            setDocuments((prev) =>
+              prev.map((doc) =>
+                doc.id === updatedDoc.id ? { ...doc, processingStatus: updatedDoc.processingStatus } : doc
+              )
+            );
+            setSelectedDocument((prev) =>
+              prev && prev.id === updatedDoc.id ? { ...prev, processingStatus: updatedDoc.processingStatus } : prev
+            );
+          }}
         />
       )}
 

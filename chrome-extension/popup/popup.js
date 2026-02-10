@@ -213,7 +213,7 @@ function getDefaultPresets() {
       icon: '📄',
       color: '#b31b1b',
       type: 'paper',
-      patterns: ['arxiv.org/abs/*', 'arxiv.org/pdf/*'],
+      patterns: ['arxiv.org/abs/*', 'arxiv.org/pdf/*', 'arxiv.org/html/*'],
       endpoint: '/upload/arxiv',
       enabled: true,
     },
@@ -225,6 +225,16 @@ function getDefaultPresets() {
       type: 'paper',
       patterns: ['openreview.net/forum?id=*', 'openreview.net/pdf?id=*'],
       endpoint: '/upload/openreview',
+      enabled: true,
+    },
+    {
+      id: 'huggingface',
+      name: 'Hugging Face Papers',
+      icon: '🤗',
+      color: '#ff9d00',
+      type: 'paper',
+      patterns: ['huggingface.co/papers/*'],
+      endpoint: '/upload/arxiv', // Uses arXiv endpoint since HF papers are arXiv papers
       enabled: true,
     },
     {
@@ -280,6 +290,8 @@ async function checkForPresets() {
             await handleArxivPreset(tab);
           } else if (preset.id === 'openreview') {
             await handleOpenReviewPreset(tab);
+          } else if (preset.id === 'huggingface') {
+            await handleHuggingFacePreset(tab);
           } else {
             // Generic preset handling
             showPresetBanner(preset);
@@ -335,6 +347,86 @@ async function handleOpenReviewPreset(tab) {
       showOpenReviewMode(currentOpenReviewInfo);
     }
   }
+}
+
+// Handle Hugging Face Papers preset (these are arXiv papers displayed on HF)
+async function handleHuggingFacePreset(tab) {
+  // Try to get HF info from content script first
+  try {
+    const hfInfo = await chrome.tabs.sendMessage(tab.id, { action: 'getHuggingFaceInfo' });
+    if (hfInfo && hfInfo.isHuggingFace && hfInfo.arxivId) {
+      currentArxivInfo = {
+        isArxiv: true,
+        arxivId: hfInfo.arxivId,
+        title: hfInfo.title,
+        authors: hfInfo.authors,
+        abstract: hfInfo.abstract,
+        pdfUrl: hfInfo.pdfUrl,
+        absUrl: hfInfo.absUrl,
+        source: 'huggingface'
+      };
+      // If we got title from HF page, show it, otherwise fetch from arXiv
+      if (hfInfo.title) {
+        showArxivMode(currentArxivInfo);
+        showHuggingFaceBanner(hfInfo.arxivId);
+      } else {
+        await fetchArxivMetadata(hfInfo.arxivId);
+        showHuggingFaceBanner(hfInfo.arxivId);
+      }
+      return;
+    }
+  } catch (e) {
+    // Content script not available, fall back to URL parsing
+  }
+
+  // Fall back to URL parsing
+  const arxivId = parseHuggingFaceUrlFromPopup(tab.url);
+  if (arxivId) {
+    currentArxivInfo = {
+      isArxiv: true,
+      arxivId,
+      pdfUrl: `https://arxiv.org/pdf/${arxivId}.pdf`,
+      source: 'huggingface'
+    };
+    // Fetch full metadata from arXiv
+    await fetchArxivMetadata(arxivId);
+    // Show HF-specific banner
+    showHuggingFaceBanner(arxivId);
+  }
+}
+
+// Parse Hugging Face papers URL to get arXiv ID
+function parseHuggingFaceUrlFromPopup(url) {
+  // Pattern: huggingface.co/papers/2501.12948
+  const match = url.match(/huggingface\.co\/papers\/(\d+\.\d+(?:v\d+)?)/i);
+  return match ? match[1] : null;
+}
+
+// Show Hugging Face detection banner
+function showHuggingFaceBanner(arxivId) {
+  // Check if banner already exists
+  if (document.getElementById('hfBanner')) return;
+
+  const banner = document.createElement('div');
+  banner.id = 'hfBanner';
+  banner.className = 'arxiv-banner'; // Reuse arXiv banner style
+  banner.style.background = 'linear-gradient(135deg, #ff9d00 0%, #ff6600 100%)';
+  banner.innerHTML = `
+    <div class="arxiv-badge">
+      <span class="arxiv-icon">🤗</span>
+      <span>HuggingFace Paper</span>
+    </div>
+    <div class="arxiv-id">arXiv:${arxivId}</div>
+    <button type="button" id="saveHfPdf" class="btn btn-arxiv">
+      <span>📥</span> Save PDF
+    </button>
+  `;
+
+  const header = document.querySelector('header');
+  header.after(banner);
+
+  // Add click handler for save button (reuses arXiv save logic)
+  document.getElementById('saveHfPdf').addEventListener('click', saveArxivPdf);
 }
 
 // Show generic preset banner (for presets without special endpoints)
@@ -410,12 +502,20 @@ async function loadTags() {
 // Parse arXiv URL to get paper ID
 function parseArxivUrlFromPopup(url) {
   const patterns = [
-    /arxiv\.org\/abs\/(\d+\.\d+(?:v\d+)?)/i,
-    /arxiv\.org\/pdf\/(\d+\.\d+(?:v\d+)?)/i,
+    // New format: 2507.05257, 2507.05257v2, with optional .pdf extension
+    /arxiv\.org\/abs\/(\d{4}\.\d{4,5}(?:v\d+)?)/i,
+    /arxiv\.org\/pdf\/(\d{4}\.\d{4,5}(?:v\d+)?)(?:\.pdf)?/i,
+    /arxiv\.org\/html\/(\d{4}\.\d{4,5}(?:v\d+)?)/i,
+    // Old format: hep-ph/9901312, cs.AI/0001001
+    /arxiv\.org\/abs\/([a-z-]+\/\d{7}(?:v\d+)?)/i,
+    /arxiv\.org\/pdf\/([a-z-]+\/\d{7}(?:v\d+)?)(?:\.pdf)?/i,
   ];
   for (const pattern of patterns) {
     const match = url.match(pattern);
-    if (match) return match[1].replace('.pdf', '');
+    if (match) {
+      // Remove any trailing .pdf if present
+      return match[1].replace(/\.pdf$/i, '');
+    }
   }
   return null;
 }

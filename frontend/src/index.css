@@ -756,6 +756,17 @@ body {
   border-color: #fde047;
 }
 
+/* Generate button */
+.action-btn.generate-btn {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #6ee7b7;
+}
+
+.action-btn.generate-btn:hover:not(:disabled) {
+  background: #d1fae5;
+}
+
 /* Waiting button */
 .action-btn.waiting-btn {
   background: #fef3c7;
@@ -988,6 +999,82 @@ body {
   padding: 40px;
   text-align: center;
   color: var(--text-secondary);
+}
+
+/* Generate Notes Panel */
+.generate-panel {
+  margin-top: 20px;
+  padding: 20px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 400px;
+  text-align: left;
+}
+
+.generate-panel h3 {
+  margin: 0 0 14px 0;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+
+.generate-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.generate-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.generate-option label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.generate-option select {
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  color: var(--text-primary);
+}
+
+.generate-option .option-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.generate-btn-action {
+  width: 100%;
+  padding: 10px;
+  background: #059669;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.generate-btn-action:hover:not(:disabled) {
+  background: #047857;
+}
+
+.generate-btn-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .notes-error {

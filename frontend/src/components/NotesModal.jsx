@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import MarkdownContent, { parseFrontmatter, cleanNotesContent } from './shared/MarkdownRenderer';
 import MarkdownEditor from './MarkdownEditor';
 
-function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthenticated, getAuthHeaders, onAiEditStatusChange, onViewUserNotes }) {
+function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthenticated, getAuthHeaders, onAiEditStatusChange, onViewUserNotes, onDocumentUpdate }) {
   const [notes, setNotes] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -17,6 +17,15 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthent
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiEditStatus, setAiEditStatus] = useState(null); // null | 'submitting' | 'queued' | 'processing'
   const aiPollRef = useRef(null);
+
+  // Generate Notes state
+  const [readerModes, setReaderModes] = useState([]);
+  const [providers, setProviders] = useState([]);
+  const [selectedMode, setSelectedMode] = useState(document.readerMode || 'auto_reader_v2');
+  const [selectedProvider, setSelectedProvider] = useState(document.analysisProvider || 'codex-cli');
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState(null);
+  const generatePollRef = useRef(null);
 
   const parsedPaperNotes = useMemo(() => {
     if (!notes?.notesContent) return null;
@@ -66,10 +75,30 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthent
     fetchNotes();
   }, [fetchNotes]);
 
+  // Fetch reader modes and providers for generate panel
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const [modesRes, providersRes] = await Promise.all([
+          fetch(`${apiUrl}/reader/modes`),
+          fetch(`${apiUrl}/reader/providers`),
+        ]);
+        const modesData = await modesRes.json();
+        const providersData = await providersRes.json();
+        setReaderModes(modesData.modes || []);
+        setProviders(providersData.providers || []);
+      } catch (err) {
+        console.error('Error fetching reader options:', err);
+      }
+    };
+    fetchOptions();
+  }, [apiUrl]);
+
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
       if (aiPollRef.current) clearInterval(aiPollRef.current);
+      if (generatePollRef.current) clearInterval(generatePollRef.current);
     };
   }, []);
 
@@ -239,6 +268,74 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthent
 
   const aiEditInProgress = aiEditStatus === 'queued' || aiEditStatus === 'processing';
 
+  // Generate notes: queue and poll
+  const handleGenerateNotes = async () => {
+    if (!getAuthHeaders) return;
+    setGenerating(true);
+    setGenerateError(null);
+
+    try {
+      const response = await fetch(`${apiUrl}/reader/queue/${document.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({
+          readerMode: selectedMode,
+          provider: selectedProvider,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to queue generation');
+      }
+
+      // Update parent document status
+      onDocumentUpdate?.({ ...document, processingStatus: 'queued' });
+
+      // Start polling for completion
+      startGeneratePoll();
+    } catch (err) {
+      console.error('Error generating notes:', err);
+      setGenerateError(err.message);
+      setGenerating(false);
+    }
+  };
+
+  const startGeneratePoll = () => {
+    if (generatePollRef.current) clearInterval(generatePollRef.current);
+
+    generatePollRef.current = setInterval(async () => {
+      try {
+        const response = await fetch(`${apiUrl}/documents/${document.id}/notes?inline=true`);
+        const data = await response.json();
+
+        if (data.processingStatus === 'completed') {
+          clearInterval(generatePollRef.current);
+          generatePollRef.current = null;
+          setGenerating(false);
+          setNotes(data);
+          onDocumentUpdate?.({ ...document, processingStatus: 'completed' });
+        } else if (data.processingStatus === 'failed') {
+          clearInterval(generatePollRef.current);
+          generatePollRef.current = null;
+          setGenerating(false);
+          setGenerateError('Processing failed. Please try again.');
+          onDocumentUpdate?.({ ...document, processingStatus: 'failed' });
+        } else {
+          onDocumentUpdate?.({ ...document, processingStatus: data.processingStatus });
+        }
+      } catch (err) {
+        console.error('Error polling generation status:', err);
+      }
+    }, 10000); // Poll every 10 seconds
+  };
+
+  const processingStatus = notes?.processingStatus || document.processingStatus || 'idle';
+  const canGenerate = processingStatus === 'idle' || processingStatus === 'pending' || processingStatus === 'failed';
+
   return (
     <div className="modal-backdrop" onClick={handleBackdropClick}>
       <div className={`notes-modal ${isMaximized ? 'maximized' : ''}`}>
@@ -369,21 +466,56 @@ function NotesModal({ document, apiUrl, initialTab = 'paper', onClose, isAuthent
 
           {notes && !notes.hasNotes && !notes.hasCodeNotes && (
             <div className="notes-empty">
-              <p>No notes available yet.</p>
-              <p className="notes-status">
-                Processing status: <strong>{notes.processingStatus}</strong>
-              </p>
-              {notes.processingStatus === 'pending' && (
-                <p className="hint">This document will be processed automatically.</p>
-              )}
-              {notes.processingStatus === 'queued' && (
-                <p className="hint">This document is in the processing queue.</p>
-              )}
-              {notes.processingStatus === 'processing' && (
-                <p className="hint">This document is currently being processed...</p>
-              )}
-              {notes.processingStatus === 'failed' && (
-                <p className="hint error">Processing failed. Please try again later.</p>
+              {(processingStatus === 'queued' || processingStatus === 'processing' || generating) ? (
+                <>
+                  <div className="spinner"></div>
+                  <p>{processingStatus === 'processing' || generating ? 'Generating notes...' : 'Waiting in queue...'}</p>
+                  <p className="hint">This may take a few minutes depending on the paper length.</p>
+                </>
+              ) : (
+                <>
+                  <p>No AI notes yet.</p>
+                  {processingStatus === 'failed' && (
+                    <p className="hint error">Previous generation failed. Try again with different settings.</p>
+                  )}
+                  {isAuthenticated && (
+                    <div className="generate-panel">
+                      <h3>Generate AI Notes</h3>
+                      <div className="generate-options">
+                        <div className="generate-option">
+                          <label>Reader Mode</label>
+                          <select value={selectedMode} onChange={(e) => setSelectedMode(e.target.value)}>
+                            {readerModes.map((mode) => (
+                              <option key={mode.id} value={mode.id}>{mode.name}</option>
+                            ))}
+                          </select>
+                          {readerModes.find(m => m.id === selectedMode) && (
+                            <span className="option-desc">{readerModes.find(m => m.id === selectedMode).description}</span>
+                          )}
+                        </div>
+                        <div className="generate-option">
+                          <label>LLM Provider</label>
+                          <select value={selectedProvider} onChange={(e) => setSelectedProvider(e.target.value)}>
+                            {providers.map((p) => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      {generateError && <p className="hint error">{generateError}</p>}
+                      <button
+                        className="generate-btn-action"
+                        onClick={handleGenerateNotes}
+                        disabled={generating}
+                      >
+                        {generating ? 'Queuing...' : 'Generate Notes'}
+                      </button>
+                    </div>
+                  )}
+                  {!isAuthenticated && (
+                    <p className="hint">Login to generate AI notes.</p>
+                  )}
+                </>
               )}
             </div>
           )}

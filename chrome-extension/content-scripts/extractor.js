@@ -15,6 +15,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const openReviewInfo = extractOpenReviewInfo();
     sendResponse(openReviewInfo);
   }
+  if (request.action === 'getHuggingFaceInfo') {
+    const hfInfo = extractHuggingFaceInfo();
+    sendResponse(hfInfo);
+  }
   return true;
 });
 
@@ -27,16 +31,20 @@ function isArxivPage() {
 function extractArxivId() {
   const url = window.location.href;
   const patterns = [
-    /arxiv\.org\/abs\/(\d+\.\d+(?:v\d+)?)/i,
-    /arxiv\.org\/pdf\/(\d+\.\d+(?:v\d+)?)/i,
-    /arxiv\.org\/abs\/([a-z-]+\/\d+(?:v\d+)?)/i,
-    /arxiv\.org\/pdf\/([a-z-]+\/\d+(?:v\d+)?)/i,
+    // New format: 2507.05257, 2507.05257v2, with optional .pdf extension
+    /arxiv\.org\/abs\/(\d{4}\.\d{4,5}(?:v\d+)?)/i,
+    /arxiv\.org\/pdf\/(\d{4}\.\d{4,5}(?:v\d+)?)(?:\.pdf)?/i,
+    /arxiv\.org\/html\/(\d{4}\.\d{4,5}(?:v\d+)?)/i,
+    // Old format: hep-ph/9901312, cs.AI/0001001
+    /arxiv\.org\/abs\/([a-z-]+\/\d{7}(?:v\d+)?)/i,
+    /arxiv\.org\/pdf\/([a-z-]+\/\d{7}(?:v\d+)?)(?:\.pdf)?/i,
   ];
 
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) {
-      return match[1].replace('.pdf', '');
+      // Remove any trailing .pdf if present
+      return match[1].replace(/\.pdf$/i, '');
     }
   }
   return null;
@@ -95,6 +103,56 @@ function extractArxivInfo() {
   // For PDF pages, we only have the ID
   if (window.location.pathname.includes('/pdf/')) {
     info.title = `arXiv:${arxivId}`;
+  }
+
+  return info;
+}
+
+// Check if current page is Hugging Face Papers
+function isHuggingFacePapersPage() {
+  return window.location.hostname.includes('huggingface.co') &&
+         window.location.pathname.startsWith('/papers/');
+}
+
+// Extract Hugging Face paper info (these are arXiv papers)
+function extractHuggingFaceInfo() {
+  if (!isHuggingFacePapersPage()) {
+    return { isHuggingFace: false };
+  }
+
+  // Extract arXiv ID from URL: huggingface.co/papers/2501.12948
+  const match = window.location.pathname.match(/\/papers\/(\d{4}\.\d{4,5}(?:v\d+)?)/i);
+  if (!match) {
+    return { isHuggingFace: false };
+  }
+
+  const arxivId = match[1];
+  const info = {
+    isHuggingFace: true,
+    arxivId: arxivId,
+    pdfUrl: `https://arxiv.org/pdf/${arxivId}.pdf`,
+    absUrl: `https://arxiv.org/abs/${arxivId}`,
+    title: '',
+    authors: [],
+    abstract: '',
+  };
+
+  // Try to extract title from page (h1 element)
+  const titleEl = document.querySelector('h1');
+  if (titleEl) {
+    info.title = titleEl.textContent.trim();
+  }
+
+  // Try to extract abstract (usually in a paragraph with specific class)
+  const abstractEl = document.querySelector('p.text-gray-700, .prose p');
+  if (abstractEl) {
+    info.abstract = abstractEl.textContent.trim();
+  }
+
+  // Try to extract authors from author links
+  const authorLinks = document.querySelectorAll('a[href*="/papers?author="]');
+  if (authorLinks.length > 0) {
+    info.authors = Array.from(authorLinks).map(a => a.textContent.trim());
   }
 
   return info;
@@ -326,6 +384,7 @@ function detectContentType() {
   if (
     hostname.includes('arxiv.org') ||
     hostname.includes('openreview.net') ||
+    (hostname.includes('huggingface.co') && url.includes('/papers/')) ||
     hostname.includes('scholar.google') ||
     hostname.includes('semanticscholar') ||
     hostname.includes('doi.org') ||

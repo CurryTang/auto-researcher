@@ -21,10 +21,6 @@ class QueueService {
     }
 
     const status = doc.rows[0].processing_status;
-    if (status === 'completed') {
-      throw new Error(`Document ${documentId} already processed`);
-    }
-
     if (status === 'processing') {
       throw new Error(`Document ${documentId} is currently being processed`);
     }
@@ -62,7 +58,7 @@ class QueueService {
       return null;
     }
 
-    // Get the highest priority, oldest document from queue
+    // Get the highest priority, oldest document from queue (respecting scheduled_at for retries)
     const result = await db.execute(`
       SELECT pq.id, pq.document_id, pq.retry_count, pq.max_retries,
              d.title, d.s3_key, d.file_size, d.mime_type,
@@ -70,6 +66,7 @@ class QueueService {
       FROM processing_queue pq
       JOIN documents d ON pq.document_id = d.id
       WHERE d.processing_status = 'queued'
+        AND pq.scheduled_at <= CURRENT_TIMESTAMP
       ORDER BY pq.priority DESC, pq.scheduled_at ASC
       LIMIT 1
     `);

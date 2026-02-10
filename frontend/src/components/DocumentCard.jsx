@@ -76,7 +76,7 @@ function DocumentCard({ document, onDownload, onViewNotes, onViewUserNotes, onTo
   };
 
   const getStatusBadge = (status) => {
-    if (!status) return null;
+    if (!status || status === 'idle') return null;
     const statusConfig = {
       pending: { label: 'Pending', className: 'status-pending' },
       queued: { label: 'Queued', className: 'status-queued' },
@@ -186,9 +186,13 @@ function DocumentCard({ document, onDownload, onViewNotes, onViewUserNotes, onTo
           <button className="action-btn paper-btn" onClick={() => onViewNotes(document, 'paper')} title="View AI-generated notes">
             AI Notes
           </button>
+        ) : (processingStatus === 'idle' || processingStatus === 'pending' || processingStatus === 'failed') ? (
+          <button className="action-btn generate-btn" onClick={() => onViewNotes(document, 'paper')} title="Generate AI notes">
+            Generate
+          </button>
         ) : (
           <button className="action-btn status-btn" onClick={() => onViewNotes(document, 'paper')} title="View processing status">
-            {processingStatus === 'processing' ? '...' : 'Status'}
+            {processingStatus === 'processing' ? 'Processing...' : 'Queued...'}
           </button>
         )}
         <button className="action-btn notes-btn" onClick={() => onViewUserNotes(document)} title="My personal notes">

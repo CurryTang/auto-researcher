@@ -54,7 +54,7 @@ async function initDatabase() {
 
   // Add processing columns to documents table (migration-safe)
   const processingColumns = [
-    { name: 'processing_status', definition: "TEXT DEFAULT 'pending'" },
+    { name: 'processing_status', definition: "TEXT DEFAULT 'idle'" },
     { name: 'notes_s3_key', definition: 'TEXT' },
     { name: 'page_count', definition: 'INTEGER' },
     { name: 'processing_error', definition: 'TEXT' },
@@ -279,6 +279,16 @@ Why this paper might be important for researchers.`
   await db.execute(`
     CREATE INDEX IF NOT EXISTS idx_ai_edit_queue_document ON ai_edit_queue(document_id)
   `);
+
+  // Migration: reset stuck queued/pending papers to idle (on-demand generation)
+  const stuck = await db.execute(`
+    SELECT COUNT(*) as count FROM documents WHERE processing_status IN ('queued', 'pending')
+  `);
+  if (stuck.rows[0].count > 0) {
+    await db.execute(`UPDATE documents SET processing_status = 'idle' WHERE processing_status IN ('queued', 'pending')`);
+    await db.execute(`DELETE FROM processing_queue`);
+    console.log(`[Migration] Reset ${stuck.rows[0].count} stuck queued/pending papers to idle`);
+  }
 
   console.log('Database initialized');
   return db;

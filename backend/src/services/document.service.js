@@ -60,7 +60,7 @@ function rowToDocument(row) {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     // Processing status fields
-    processingStatus: row.processing_status || 'pending',
+    processingStatus: row.processing_status || 'idle',
     notesS3Key: row.notes_s3_key,
     pageCount: row.page_count,
     processingError: row.processing_error,
@@ -90,8 +90,8 @@ async function createDocument(data) {
   const tags = JSON.stringify(data.tags || []);
 
   const result = await db.execute({
-    sql: `INSERT INTO documents (title, type, original_url, s3_key, s3_url, file_size, mime_type, tags, notes, user_id, reader_mode, analysis_provider)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO documents (title, type, original_url, s3_key, s3_url, file_size, mime_type, tags, notes, user_id, reader_mode, analysis_provider, processing_status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle')`,
     args: [
       data.title,
       data.type || 'other',

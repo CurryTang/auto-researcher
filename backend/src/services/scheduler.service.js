@@ -29,17 +29,12 @@ class SchedulerService {
 
     console.log('[Scheduler] Starting document processing scheduler...');
 
-    const scanIntervalMs = config.reader?.scanIntervalMs || 30 * 60 * 1000; // 30 minutes
     const processIntervalMs = config.reader?.processIntervalMs || 60 * 1000; // 1 minute
     const cleanupIntervalMs = 15 * 60 * 1000; // 15 minutes
 
-    // Run initial scan immediately
-    this.scanForNewDocuments();
-
-    // Schedule periodic scans
-    this.scanInterval = setInterval(() => {
-      this.scanForNewDocuments();
-    }, scanIntervalMs);
+    // No auto-scanning: notes generation is on-demand only.
+    // Users trigger it via the UI. The scheduler only processes
+    // items already in the queue.
 
     // Schedule periodic processing checks
     this.processInterval = setInterval(() => {
@@ -52,7 +47,7 @@ class SchedulerService {
     }, cleanupIntervalMs);
 
     this.isRunning = true;
-    console.log(`[Scheduler] Started with scan interval ${scanIntervalMs / 1000 / 60} min, process interval ${processIntervalMs / 1000} sec`);
+    console.log(`[Scheduler] Started (on-demand mode) with process interval ${processIntervalMs / 1000} sec`);
   }
 
   // Stop all schedulers

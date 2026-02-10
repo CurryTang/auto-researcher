@@ -43,6 +43,19 @@ router.get('/modes', (req, res) => {
           '中文输出',
         ],
       },
+      {
+        id: 'auto_reader_v3',
+        name: 'Auto Reader V3 (Deep)',
+        description: '2-pass deep analysis with minimal implementation and mathematical framework (Chinese output)',
+        features: [
+          '2-pass focused analysis',
+          '表层分析: 任务定义、领域现状、输入输出规格',
+          '深层分析: 最小复现代码、数学框架、批判性分析',
+          'First-principles thinking',
+          '可运行的简化代码实现',
+          '中文输出',
+        ],
+      },
     ],
   });
 });
@@ -94,20 +107,30 @@ router.get('/queue/status', async (req, res) => {
 router.post('/queue/:documentId', requireAuth, async (req, res) => {
   try {
     const { documentId } = req.params;
-    const { priority = 0, readerMode = 'vanilla', codeUrl } = req.body;
+    const { priority = 0, readerMode = 'auto_reader_v2', codeUrl, provider } = req.body;
 
-    // Update document with reader mode and code URL before queuing
+    // Update document with reader mode, provider, and code URL before queuing
     const { getDb } = require('../db');
     const db = getDb();
 
+    const updates = ['reader_mode = ?', 'updated_at = CURRENT_TIMESTAMP'];
+    const args = [readerMode];
+
+    if (codeUrl !== undefined) {
+      updates.push('code_url = ?', 'has_code = ?');
+      args.push(codeUrl || null, codeUrl ? 1 : 0);
+    }
+
+    if (provider) {
+      updates.push('analysis_provider = ?');
+      args.push(provider);
+    }
+
+    args.push(parseInt(documentId));
+
     await db.execute({
-      sql: `UPDATE documents SET
-              reader_mode = ?,
-              code_url = ?,
-              has_code = ?,
-              updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?`,
-      args: [readerMode, codeUrl || null, codeUrl ? 1 : 0, parseInt(documentId)],
+      sql: `UPDATE documents SET ${updates.join(', ')} WHERE id = ?`,
+      args,
     });
 
     const result = await queueService.enqueueDocument(parseInt(documentId), priority);
@@ -115,6 +138,7 @@ router.post('/queue/:documentId', requireAuth, async (req, res) => {
     res.json({
       ...result,
       readerMode,
+      provider,
       codeUrl,
     });
   } catch (error) {
@@ -139,9 +163,9 @@ router.delete('/queue/:documentId', requireAuth, async (req, res) => {
       args: [parseInt(documentId)],
     });
 
-    // Reset document status to pending
+    // Reset document status to idle
     await db.execute({
-      sql: "UPDATE documents SET processing_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND processing_status = 'queued'",
+      sql: "UPDATE documents SET processing_status = 'idle', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND processing_status = 'queued'",
       args: [parseInt(documentId)],
     });
 
@@ -282,16 +306,27 @@ router.post('/process/:documentId', requireAuth, async (req, res) => {
 });
 
 /**
- * POST /api/reader/scan
- * Trigger an immediate scan for new documents (requires auth)
+ * POST /api/reader/reset-stuck
+ * Reset all stuck queued/pending papers to idle (requires auth)
  */
-router.post('/scan', requireAuth, async (req, res) => {
+router.post('/reset-stuck', requireAuth, async (req, res) => {
   try {
-    const result = await schedulerService.runImmediateScan();
-    res.json(result);
+    const { getDb } = require('../db');
+    const db = getDb();
+
+    // Reset queued and pending documents to idle
+    const result = await db.execute(`
+      UPDATE documents SET processing_status = 'idle', updated_at = CURRENT_TIMESTAMP
+      WHERE processing_status IN ('queued', 'pending')
+    `);
+
+    // Clean up the processing queue
+    await db.execute(`DELETE FROM processing_queue`);
+
+    res.json({ success: true, resetCount: result.rowsAffected });
   } catch (error) {
-    console.error('Error running scan:', error);
-    res.status(500).json({ error: 'Failed to run scan' });
+    console.error('Error resetting stuck papers:', error);
+    res.status(500).json({ error: 'Failed to reset stuck papers' });
   }
 });
 
